@@ -21,12 +21,12 @@ cat > "$app_dir/Contents/Info.plist" <<'PLIST'
   <key>CFBundleDisplayName</key><string>Workspace Status</string>
   <key>CFBundleExecutable</key><string>WorkspaceStatus</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0.2</string>
-  <key>CFBundleVersion</key><string>3</string>
+  <key>CFBundleShortVersionString</key><string>1.1.0</string>
+  <key>CFBundleVersion</key><string>4</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSAccessibilityUsageDescription</key><string>Identify apps with visible notification banners and Dock badges.</string>
+  <key>NSAccessibilityUsageDescription</key><string>Read app unread indicators from Dock badges.</string>
 </dict></plist>
 PLIST
 /usr/libexec/PlistBuddy -c "Merge '$build_cache/icon-info.plist'" "$app_dir/Contents/Info.plist"

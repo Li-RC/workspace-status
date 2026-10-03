@@ -21,7 +21,7 @@ Workspace Status is a native macOS menu bar app for [AeroSpace](https://nikitabo
 - **Unread indicators.** An orange bell highlights apps with Dock badges. View those apps and their badge values under **Notifications**.
 - **Local operation.** No third-party packages or network services. Workspace updates follow AeroSpace events, and the app leaves your window manager configuration untouched.
 
-> This README describes the current development source. Published releases may have an earlier feature set.
+> This README describes Workspace Status 1.1.0. Earlier releases may have a different feature set.
 
 ## Requirements
 
@@ -94,7 +94,7 @@ The build script compiles the app for your Mac's architecture, generates its nat
 <details>
 <summary><strong>Developer checks and previews</strong></summary>
 
-Run checks from the repository root:
+Run checks from the repository root. Quit any running Workspace Status instance before the UI checks so duplicate menu bar items do not affect ordering:
 
 ```sh
 app_binary="dist/Workspace Status.app/Contents/MacOS/WorkspaceStatus"
