@@ -80,7 +80,7 @@ Keep the app in a stable location before granting Accessibility access. Moving o
 
 ## Build from source
 
-Install Xcode or Apple's Command Line Tools with the **macOS 26 SDK or newer**, then run:
+Install **Xcode with the macOS 26 SDK or newer** and select it as the active developer directory. The build uses Xcode's asset compiler for the Icon Composer document, alongside the Swift compiler. Then run:
 
 ```sh
 git clone https://github.com/Li-RC/workspace-status.git
@@ -89,7 +89,7 @@ bash build.sh
 open "dist/Workspace Status.app"
 ```
 
-The build script compiles the app for your Mac's architecture, signs it locally, and runs its self-tests. The app bundle is written to `dist/Workspace Status.app`.
+The build script compiles the app for your Mac's architecture, generates its native app icon from the editable Icon Composer project, signs it locally, and runs its self-tests. The app bundle is written to `dist/Workspace Status.app`.
 
 <details>
 <summary><strong>Developer checks and previews</strong></summary>

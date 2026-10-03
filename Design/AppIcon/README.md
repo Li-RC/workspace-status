@@ -26,6 +26,6 @@ To export the default preview again with the installed Xcode:
   --width 1024 --height 1024 --scale 1 --design-generation 26
 ```
 
-Run the command from the repository root. These design files are retained for editing; the app's build has not been changed to install the new icon.
+Run the command from the repository root. These PNG exports are previews only. `build.sh` compiles the editable `.icon` document directly with Apple's `actool`, producing `Assets.car` for native appearance variants and `WorkspaceStatus.icns` for compatibility. Both are embedded in the app's Resources directory, and the compiler's icon metadata is merged into Info.plist before signing.
 
 The artwork is original to Workspace Status and covered by the repository's MIT license.
