@@ -10,6 +10,7 @@ Build from source or download the ZIP from GitHub Releases, extract it, and open
 
 - The menu bar shows the focused workspace, up to three app icons, and a bell. A `+` means more apps are open.
 - The overview lists every AeroSpace workspace, including empty workspaces. The current one is highlighted.
+- The popup fits the available space below the menu bar on the display where it opens; its contents scroll when necessary.
 - Click a workspace row to switch. Click its window count/chevron to expand it; click a window to focus it.
 - The bell shows the most recently detected notification app, or an app with a Dock badge when no banner has been detected. Hover for the source label.
 - Click a notification app or badge to focus one of its windows or launch the app.
@@ -40,6 +41,8 @@ bash build.sh
 The build runs targeted checks for JSON decoding (including quoted/newline titles), named and empty workspaces, and ambiguous notification attribution. `--diagnose` reads live AeroSpace data without switching workspaces or prompting for permissions. It prints workspace/app names and permission state, but excludes window titles and notification bodies.
 
 `--smoke-test` briefly runs the real menu bar app for eight seconds, checks live workspace loading and menu bar image creation, reports the Accessibility monitor status, and exits. It does not switch workspaces or generate notifications. This build passed those checks on the development machine. Actual banner attribution and manual click interactions remain to be validated in use.
+
+`--popover-test` briefly opens the real popup, updates its list, and checks that its window stays within the display and its content within the usable screen area. It exits after reporting the result. The build also checks size limits for compact screens and displays with negative coordinate origins.
 
 To render an offscreen preview from live workspace data:
 

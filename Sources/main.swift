@@ -15,7 +15,46 @@ if args.contains("--self-test") {
     precondition(notificationSource(["Mail", "Messages"], apps: apps) == nil)
     precondition(notificationSource(["You have Mail", "2 notifications"], apps: apps) == nil)
     precondition(notificationSource([], apps: apps) == nil)
-    print("PASS: JSON escaping, named and empty workspaces, notification attribution and ambiguity.")
+    let shortScreen = NSRect(x: 0, y: 40, width: 800, height: 500)
+    let shortSize = overviewSize(visibleFrame: shortScreen, anchor: NSRect(x: 600, y: 540, width: 100, height: 24))
+    precondition(shortSize.width + 28 <= shortScreen.width && shortSize.height + 28 <= shortScreen.height)
+    let secondaryScreen = NSRect(x: -500, y: -700, width: 400, height: 600)
+    let secondarySize = overviewSize(visibleFrame: secondaryScreen, anchor: NSRect(x: -200, y: -100, width: 80, height: 24))
+    precondition(secondarySize.width + 28 <= secondaryScreen.width && secondarySize.height + 28 <= secondaryScreen.height)
+    print("PASS: JSON decoding, workspace contents, notification attribution, compact and secondary display sizing.")
+} else if args.contains("--popover-test") {
+    let application = NSApplication.shared
+    let delegate = AppDelegate()
+    application.delegate = delegate
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        delegate.toggle()
+        // Grow the scroll content after opening: the host must not enlarge/reposition the popup.
+        let snapshot = delegate.workspaces.snapshot
+        delegate.workspaces.snapshot = Snapshot(spaces: (1...80).map(String.init), current: snapshot.current, windows: snapshot.windows)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            guard let view = delegate.popover.contentViewController?.view, let window = view.window,
+                  let screen = delegate.item.button?.window?.screen else {
+                print("FAIL: popup window or status-item display missing")
+                exit(1)
+            }
+            let frame = window.frame
+            let available = screen.visibleFrame
+            let contentFrame = window.convertToScreen(view.convert(view.bounds, to: nil))
+            // The arrow can overlap the menu bar; the content must fit the usable area.
+            let fits = screen.frame.insetBy(dx: -1, dy: -1).contains(frame)
+                && available.insetBy(dx: -1, dy: -1).contains(contentFrame)
+            print("Popup frame: \(frame)")
+            print("Popup content frame: \(contentFrame)")
+            print("Display usable frame: \(available)")
+            print("Content size: \(delegate.popover.contentSize)")
+            print("Status button flipped: \(delegate.item.button?.isFlipped ?? false)")
+            print("Popup containment: \(fits ? "PASS" : "FAIL")")
+            delegate.popover.close()
+            delegate.workspaces.stop(); delegate.notifications.stop()
+            exit(fits ? 0 : 1)
+        }
+    }
+    application.run()
 } else if args.contains("--diagnose") {
     do {
         let snapshot = try AeroSpace.snapshot()

@@ -17,10 +17,18 @@ struct AppIcon: View {
     var body: some View { Image(nsImage: appIcon(bundle)).resizable().frame(width: 20, height: 20) }
 }
 
+func overviewSize(visibleFrame: NSRect, anchor: NSRect) -> NSSize {
+    // Leave space for the popover's border/arrow inside the screen's usable area.
+    let height = min(anchor.minY, visibleFrame.maxY) - visibleFrame.minY - 28
+    return NSSize(width: max(1, min(430, visibleFrame.width - 28)),
+                  height: max(1, min(650, height)))
+}
+
 struct Overview: View {
     @ObservedObject var workspaces: WorkspaceModel
     @ObservedObject var notifications: NotificationModel
     let close: () -> Void
+    var size = NSSize(width: 430, height: 650)
     @State private var expanded: Set<String> = []
 
     func select(_ space: String) {
@@ -166,7 +174,7 @@ struct Overview: View {
                 Spacer()
                 Button("Quit") { NSApp.terminate(nil) }.buttonStyle(.borderless).font(.caption)
             }.padding(12)
-        }.frame(width: 430, height: 650)
+        }.frame(width: size.width, height: size.height)
             .background(Color(nsColor: .windowBackgroundColor))
     }
 }
@@ -176,6 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let notifications = NotificationModel()
     var item: NSStatusItem!
     let popover = NSPopover()
+    private var hosting: NSHostingController<Overview>!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -183,8 +192,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.target = self
         item.button?.action = #selector(toggle)
         popover.behavior = .transient
-        popover.contentViewController = NSHostingController(rootView:
+        hosting = NSHostingController(rootView:
             Overview(workspaces: workspaces, notifications: notifications, close: { [weak self] in self?.popover.close() }))
+        hosting.sizingOptions = []
+        popover.contentViewController = hosting
         workspaces.changed = { [weak self] in self?.updateStatus() }
         notifications.changed = { [weak self] in self?.updateStatus() }
         updateStatus()
@@ -230,9 +241,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func toggle() {
         if popover.isShown { popover.close(); return }
-        guard let button = item.button else { return }
+        guard let button = item.button, let window = button.window, let screen = window.screen else { return }
+        let anchor = window.convertToScreen(button.convert(button.bounds, to: nil))
+        let size = overviewSize(visibleFrame: screen.visibleFrame, anchor: anchor)
+        hosting.rootView.size = size
+        hosting.view.setFrameSize(size)
+        hosting.preferredContentSize = size
+        popover.contentSize = size
         workspaces.refresh()
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: button.isFlipped ? .maxY : .minY)
         NSApp.activate(ignoringOtherApps: true)
     }
 
