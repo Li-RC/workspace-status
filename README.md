@@ -1,77 +1,147 @@
-# Workspace Status
+<div align="center">
+  <img src="Design/AppIcon/preview.png" width="112" height="112" alt="Workspace Status app icon" />
+  <h1>Workspace Status</h1>
+  <p>Your AeroSpace workspaces, applications, and unread indicators — at a glance.</p>
+  <p>
+    <a href="https://github.com/Li-RC/workspace-status/releases/latest">Download</a> ·
+    <a href="#getting-started">Getting started</a> ·
+    <a href="#build-from-source">Build from source</a> ·
+    <a href="LICENSE">MIT license</a>
+  </p>
+</div>
 
-A standalone native macOS menu bar app for AeroSpace. Requires macOS 14 or later and a running AeroSpace installation. Liquid Glass sections and controls are available on macOS 26 and later, with a compatible appearance on earlier releases. Binaries are for Apple Silicon; `build.sh` also builds for Intel when run on an Intel Mac. No third-party packages or network services are used.
+Workspace Status is a native macOS menu bar app for [AeroSpace](https://nikitabobko.github.io/AeroSpace/). See which apps are open across your workspaces, switch between them, and focus a window from a compact dropdown.
 
-**Local development version: 1.1.0, unreleased.** The behavior below describes the current source. The latest published version is 1.0.2. Builds and releases are published only on explicit request.
+## Features
 
-[Download the latest published release](https://github.com/Li-RC/workspace-status/releases/latest)
+- **Workspace overview.** Occupied workspaces appear in natural numeric order, with an icon for every distinct open application. A filled number badge identifies your current workspace.
+- **Direct navigation.** Switch workspaces from the menu bar, or use the dropdown to select an app or a specific window.
+- **Focused dropdown.** Empty workspaces stay out of the overview. Expand a workspace to see its windows; the sections below move down automatically.
+- **Native Liquid Glass.** On macOS 26 and later, separate workspace and notification sections follow the system's glass appearance. The surrounding background is transparent.
+- **Unread indicators.** An orange bell highlights apps with Dock badges. View those apps and their badge values under **Notifications**.
+- **Local operation.** No third-party packages or network services. Workspace updates follow AeroSpace events, and the app leaves your window manager configuration untouched.
 
-## Run
+> This README describes the current development source. Published releases may have an earlier feature set.
 
-Build from source or open the locally built **Workspace Status.app**. With a DMG, drag the app onto the Applications shortcut. It runs in the menu bar without a Dock icon.
+## Requirements
 
-- Every occupied workspace appears in natural numeric order, with an icon for every distinct open application, sorted by app name. The current workspace has a filled badge; other workspaces have outlined badges. Numbers follow the system's black/white menu bar contrast.
-- The current workspace keeps its menu bar badge even if empty. Empty workspaces are excluded from the dropdown.
-- Workspace Status's own popup and Notification Center windows are excluded from workspace application counts.
-- Click a workspace indicator to select that workspace. Clicking the current workspace keeps it selected. Neither action opens the dropdown. There is no right-click dropdown shortcut.
-- **Only the bell opens the dropdown; clicking it again closes it.** An orange bell indicates that an app has a Dock badge; hover to see its name.
-- Menu bar app icons are part of the workspace button and select that workspace. They are not individual app buttons: splitting the existing native control would require custom hit testing or a different menu bar layout.
-- The menu bar indicators use compact outer margins, including the bell.
-- The dropdown is normally 360 points wide and has no scroll area. It grows downward as a workspace is added or its window list expands; Notifications and Quit move down with it. The top stays anchored below the bell. If the content exceeds the display height, the entire dropdown scales to fit the screen.
-- The area around the glass blocks is fully transparent, with no extra background blur, border, or window shadow. All workspaces share one glass block, Notifications use another, and Quit is a small standalone glass button. On macOS 26+, native glass uses the system's appearance and Liquid Glass preferences, including accessibility transparency and contrast settings. The app applies no custom glass opacity, tint, or forced color scheme. Earlier macOS versions use compatible surfaces.
-- The dropdown opens with a 100 ms fade and closes immediately. Reduce Motion disables the fade. Window disclosure changes animate over 120 ms.
-- Click a workspace number in the dropdown to select it. Click an app icon to focus a window of that app in that workspace. Click the window count/chevron to expand the workspace, then click an individual window to focus it.
-- All application icons remain available; larger groups wrap onto additional rows.
-- Click a Notifications row to focus one of that app's windows or launch the app if no window is listed by AeroSpace.
-- Quit is at the bottom of the dropdown.
+| Requirement | Details |
+| --- | --- |
+| macOS | 14 or later; native Liquid Glass requires macOS 26 or later |
+| Window manager | AeroSpace must be installed and running |
+| Architecture | Published binaries target Apple Silicon; source builds use the host architecture |
+| Accessibility | Optional; required only to read Dock badges |
 
-The app uses AeroSpace's event subscription, with a 15-second reconciliation/reconnect interval. It never edits AeroSpace or SketchyBar configuration. It is built for AeroSpace workspaces; macOS Mission Control desktops are not supported.
+## Getting started
 
-macOS controls the available menu bar space and may hide status items when the bar is crowded. All occupied workspaces and applications remain available in the dropdown.
+1. Download a DMG or ZIP from [GitHub Releases](https://github.com/Li-RC/workspace-status/releases/latest).
+2. For a DMG, drag **Workspace Status.app** into **Applications**. For a ZIP, extract it and move the app into **Applications**.
+3. Start AeroSpace, then open **Workspace Status**.
 
-## Notifications and permission
+The app runs in the menu bar without a Dock icon. To start it at login, add it in **System Settings → General → Login Items**.
 
-**Notification Center is ignored.** The app does not observe Notification Center events, inspect banners or history, attribute notifications, or keep a recent notification list.
+Local builds are ad-hoc signed and are not notarized.
 
-Workspace controls work without Accessibility permission. To read Dock badges, click **Enable Accessibility…**, then enable **Workspace Status** in System Settings → Privacy & Security → Accessibility. The app checks for permission changes automatically.
+## Using Workspace Status
 
-Dock badges are read from the Dock's Accessibility interface every five seconds and displayed under **Notifications**. They are app unread indicators, not proof of a new notification. Apps without exposed Dock badges will not appear. Only app names, icons, and badge values are displayed; no notification message content is accessed. Nothing is sent to a server or persisted.
+| Control | Action |
+| --- | --- |
+| Workspace number or app icons in the menu bar | Switch to that workspace |
+| Bell | Toggle the dropdown open or closed |
+| Workspace number in the dropdown | Switch to that workspace |
+| App icon in the dropdown | Focus a window of that app in that workspace |
+| Window count / chevron | Expand or collapse the workspace's window list |
+| Window in an expanded list | Focus that window |
+| App under Notifications | Focus one of its windows, or open the app |
+| Refresh | Reload workspace information |
+| Quit | Exit Workspace Status |
 
-The local build is ad-hoc signed and not notarized. Keep the app in a stable location before enabling Accessibility. Rebuilding or moving it may require re-enabling permission. To launch at login, add it in System Settings → General → Login Items.
+Menu bar app icons belong to their workspace button. Individual app selection is available inside the dropdown. The current workspace keeps its menu bar indicator even when empty.
 
-## Rebuild and verify
+Click outside the dropdown or press **Escape** to close it. The dropdown grows downward without scrolling; if its contents exceed the display height, it scales to fit. Opening animations respect **Reduce Motion**.
 
-Install Xcode or Apple's Command Line Tools with the macOS 26 SDK or newer, then run:
+## Notifications and privacy
 
-```bash
+The **Notifications** section displays unread indicators from app badges in the Dock. To enable it:
+
+1. Open the dropdown and click **Enable Accessibility…**.
+2. Enable **Workspace Status** in **System Settings → Privacy & Security → Accessibility**.
+3. Leave the app running; it checks permission changes automatically.
+
+Workspace navigation works without this permission. Dock badges refresh every five seconds and show app names, icons, and badge values. Notification Center, notification banners, history, and message content are not read. Badge information is neither persisted nor sent to a server.
+
+Keep the app in a stable location before granting Accessibility access. Moving or rebuilding it may require granting permission again.
+
+## Limitations
+
+- Workspace navigation supports **AeroSpace workspaces**. macOS Mission Control desktops are not supported.
+- Dock badges represent app unread counts or status; they do not confirm a new notification. Apps without an exposed Dock badge will not appear under Notifications.
+- macOS may hide indicators when the menu bar is crowded. Occupied workspaces and their applications remain available in the dropdown.
+
+## Build from source
+
+Install Xcode or Apple's Command Line Tools with the **macOS 26 SDK or newer**, then run:
+
+```sh
+git clone https://github.com/Li-RC/workspace-status.git
+cd workspace-status
 bash build.sh
-"dist/Workspace Status.app/Contents/MacOS/WorkspaceStatus" --diagnose
+open "dist/Workspace Status.app"
 ```
 
-The build runs targeted checks for JSON decoding (including quoted/newline titles), workspace ordering, occupied-workspace filtering, retaining an empty current workspace in the menu bar, app deduplication without truncation, and screen size limits. `--diagnose` reads live AeroSpace data without switching workspaces or prompting for permissions. It prints workspace/app names and permission state, excluding window titles.
+The build script compiles the app for your Mac's architecture, signs it locally, and runs its self-tests. The app bundle is written to `dist/Workspace Status.app`.
 
-`--smoke-test` briefly runs the real menu bar app for eight seconds, checks live workspace loading and menu bar image creation, reports Dock badge monitoring status, and exits. It does not switch workspaces or generate notifications.
+<details>
+<summary><strong>Developer checks and previews</strong></summary>
 
-`--popover-test` opens the real popup through the bell, changes the list, and checks that the window and its content stay within the display. It verifies the transparent background without an extra blur layer, completed fade, bell mouse-down handling, outside-click and Escape dismissal, and that clicking the current workspace does not open the popup. Add `--render-popup-preview /tmp/popup.png` to capture a stable dropdown, skipping the stress-list update. It exports the window and a `-composited.png` image of the dropdown region over the desktop; this requires screen capture access.
+Run checks from the repository root:
 
-`--layout-test` verifies native panel growth when windows expand or a workspace is added, shrinking after collapse, a fixed top edge, and an 80-workspace list fitting the screen without a scroll view. It uses synthetic data and does not switch your workspaces. Add `--render-layout-preview /tmp/layout` to export collapsed and expanded examples.
-
-`--bell-click-test` sends four mouse-down/up events through AppKit to the real bell button and verifies the sequence open → closed → open → closed. It does not move the pointer or switch workspaces.
-
-`--menu-test` creates real menu bar indicators from a synthetic fixture. It checks ordering, native template badges, compact padding, uncut image bounds, and an eight-app workspace without truncation. It does not switch actual workspaces. Add `--render-menu-preview /tmp/workspaces.png` to export the fixture's controls, including the bell.
-
-To render an offscreen layout preview from live workspace data:
-
-```bash
-"dist/Workspace Status.app/Contents/MacOS/WorkspaceStatus" --render-preview /tmp/workspace-status.png
+```sh
+app_binary="dist/Workspace Status.app/Contents/MacOS/WorkspaceStatus"
+"$app_binary" --diagnose
+"$app_binary" --menu-test
+"$app_binary" --layout-test
+"$app_binary" --bell-click-test
+"$app_binary" --popover-test
 ```
 
-Offscreen rendering does not reproduce WindowServer's native blur/glass composition. Use the popup window capture for appearance checks. Automated checks cover layout and the bell/current-workspace trigger paths; manual inactive-workspace switching and app focus still need validation in use.
+| Check | Coverage |
+| --- | --- |
+| `--self-test` | JSON decoding, workspace ordering and filtering, app deduplication, and display size limits; also runs during the build |
+| `--diagnose` | Live workspace and application data plus Accessibility state, excluding window titles |
+| `--smoke-test` | Eight-second run checking live workspace loading and menu bar image creation; quit any existing instance first |
+| `--menu-test` | Native menu bar ordering, complete app icons, compact spacing, and current-workspace clicks |
+| `--layout-test` | Expansion, added workspaces, collapse, a fixed top edge, and a tall list fitting without scrolling |
+| `--bell-click-test` | Four native bell clicks verifying open → closed → open → closed |
+| `--popover-test` | Popup containment, transparent background, completed fade, and dismissal behavior |
 
-Source is in `Sources/`: AeroSpace access and model, Dock Accessibility badge model, SwiftUI dropdown and menu bar controller, and the command-line verification entry point.
+The checks do not switch your workspaces or generate notifications. Menu and layout tests use synthetic data. Inactive-workspace switching and individual app focus still require manual validation.
+
+To capture the native dropdown over the desktop:
+
+```sh
+"$app_binary" --popover-test --render-popup-preview /tmp/workspace-status.png
+```
+
+This requires screen capture access and exports both the window image and a `-composited.png` preview. Other preview options are `--render-menu-preview <file>` with `--menu-test`, `--render-layout-preview <prefix>` with `--layout-test`, and `--render-preview <file>` for an offscreen layout. Offscreen previews do not reproduce native glass composition.
+
+</details>
+
+## Project structure
+
+| Path | Purpose |
+| --- | --- |
+| `Sources/AeroSpace.swift` | AeroSpace integration and workspace state |
+| `Sources/Notifications.swift` | Dock badge monitoring through Accessibility |
+| `Sources/App.swift` | Menu bar controls and the SwiftUI dropdown |
+| `Sources/main.swift` | App entry point and verification commands |
+| `build.sh` | Local compilation and signing |
+| [`Design/AppIcon/`](Design/AppIcon/) | Editable Icon Composer project, SVG layers, and appearance previews |
+
+## Contributing
+
+Bug reports and pull requests are welcome. For a bug report, include your macOS version, AeroSpace version, and steps to reproduce the issue. For code changes, run the relevant checks above and verify affected interactions in the app.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
-
-References: [Apple materials and system preferences](https://developer.apple.com/design/human-interface-guidelines/materials), [AeroSpace commands](https://nikitabobko.github.io/AeroSpace/commands), [Apple Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass), [Apple NSVisualEffectView](https://developer.apple.com/documentation/appkit/nsvisualeffectview).
+Workspace Status is open source under the [MIT license](LICENSE), including its original icon artwork.
