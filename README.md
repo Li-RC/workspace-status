@@ -8,7 +8,7 @@ A standalone native macOS menu bar app for AeroSpace. Requires macOS 14 or later
 
 Build from source or download the ZIP from GitHub Releases, extract it, and open **Workspace Status.app**. It runs in the menu bar without a Dock icon. Click its workspace number and app icons to open the overview.
 
-- The menu bar shows the focused workspace, up to three app icons, and a bell. A `+` means more apps are open.
+- The menu bar shows the focused workspace, up to three app icons, and a bell. The centered number badge follows the system's black/white menu bar contrast; additional apps appear in the overview.
 - The overview lists every AeroSpace workspace, including empty workspaces. The current one is highlighted.
 - The popup fits the available space below the menu bar on the display where it opens; its contents scroll when necessary.
 - Click a workspace row to switch. Click its window count/chevron to expand it; click a window to focus it.

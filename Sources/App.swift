@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import CoreText
 
 private var iconCache: [String: NSImage] = [:]
 func appIcon(_ bundle: String) -> NSImage {
@@ -15,6 +16,29 @@ func appIcon(_ bundle: String) -> NSImage {
 struct AppIcon: View {
     let bundle: String
     var body: some View { Image(nsImage: appIcon(bundle)).resizable().frame(width: 20, height: 20) }
+}
+
+func workspaceBadge(_ label: String) -> NSImage {
+    let font = NSFont.systemFont(ofSize: 12, weight: .bold)
+    let line = CTLineCreateWithAttributedString(NSAttributedString(string: label,
+        attributes: [.font: font, .foregroundColor: NSColor.black]))
+    let bounds = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+    let width = max(22, ceil(bounds.width) + 10)
+    let image = NSImage(size: NSSize(width: width, height: 22), flipped: false) { _ in
+        NSColor.black.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 0, y: 2, width: width, height: 18), xRadius: 5, yRadius: 5).fill()
+        let context = NSGraphicsContext.current!.cgContext
+        context.saveGState()
+        context.textMatrix = .identity
+        context.textPosition = CGPoint(x: width / 2 - bounds.midX, y: 11 - bounds.midY)
+        // Cut the centered number out of the template's solid badge.
+        context.setBlendMode(.destinationOut)
+        CTLineDraw(line, context)
+        context.restoreGState()
+        return true
+    }
+    image.isTemplate = true
+    return image
 }
 
 func overviewSize(visibleFrame: NSRect, anchor: NSRect) -> NSSize {
@@ -210,19 +234,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let latest = notifications.notices.first
         let badges = notifications.badges
         let label = workspaces.error == nil ? current : "!"
-        let numberWidth = max(22, (label as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .bold)]).width + 10)
         let visible = Array(bundles.prefix(3))
-        let width = numberWidth + CGFloat(visible.count * 21) + (bundles.count > 3 ? 18 : 0) + 25 + (latest != nil || !badges.isEmpty ? 21 : 0)
+        let width = CGFloat(visible.count * 21) + 25 + (latest != nil || !badges.isEmpty ? 21 : 0)
         let image = NSImage(size: NSSize(width: width, height: 22), flipped: false) { rect in
-            NSColor.controlAccentColor.withAlphaComponent(0.18).setFill()
-            NSBezierPath(roundedRect: NSRect(x: 0, y: 2, width: numberWidth, height: 18), xRadius: 5, yRadius: 5).fill()
-            (label as NSString).draw(at: NSPoint(x: 5, y: 4), withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .bold), .foregroundColor: NSColor.labelColor])
-            var x = numberWidth + 4
+            var x: CGFloat = 4
             for bundle in visible {
                 appIcon(bundle).draw(in: NSRect(x: x, y: 3, width: 16, height: 16)); x += 21
-            }
-            if bundles.count > 3 {
-                ("+" as NSString).draw(at: NSPoint(x: x, y: 4), withAttributes: [.font: NSFont.systemFont(ofSize: 12), .foregroundColor: NSColor.secondaryLabelColor]); x += 18
             }
             let symbol = latest != nil || !badges.isEmpty ? "bell.badge.fill" : "bell"
             let bell = NSImage(systemSymbolName: symbol, accessibilityDescription: "Notifications")!
@@ -233,7 +250,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             return true
         }
-        item.button?.image = image
+        // Keep the badge native/template-tinted without recoloring the app icons.
+        let attachment = NSTextAttachment()
+        attachment.image = image
+        attachment.bounds = NSRect(x: 0, y: (NSFont.systemFont(ofSize: 12).capHeight - 22) / 2, width: width, height: 22)
+        item.button?.image = workspaceBadge(label)
+        item.button?.imagePosition = .imageLeft
+        item.button?.attributedTitle = NSAttributedString(attachment: attachment)
         let source = latest.map { "Latest notification: \($0.name)." } ?? badges.first.map { "Dock badge: \($0.name)." } ?? ""
         item.button?.toolTip = "Workspace \(current): \(Array(Set(windows.map(\.app))).sorted().joined(separator: ", ")). \(source) Click to view all workspaces."
         item.button?.setAccessibilityLabel("Workspace Status. \(item.button?.toolTip ?? "")")
