@@ -146,6 +146,7 @@ struct WorkspaceSurface: ViewModifier {
 struct Overview: View {
     @ObservedObject var workspaces: WorkspaceModel
     @ObservedObject var notifications: NotificationModel
+    @ObservedObject var placement: MenuPlacement
     let close: () -> Void
     @ObservedObject var state: OverviewState
     let resized: (CGFloat) -> Void
@@ -161,6 +162,7 @@ struct Overview: View {
 
     var contentHeight: CGFloat {
         var workspaceElements: [CGFloat] = [34]
+        if placement.notice != nil { workspaceElements.append(32) }
         if workspaces.error != nil { workspaceElements += [28, 14] }
         let spaces = workspaces.snapshot.occupiedSpaces
         if spaces.isEmpty { workspaceElements.append(34) }
@@ -212,6 +214,9 @@ struct Overview: View {
                         Button { workspaces.refresh() } label: { Image(systemName: "arrow.clockwise") }
                             .buttonStyle(.borderless).focusEffectDisabled().help("Refresh workspaces")
                     }.frame(height: 34)
+                    if let notice = placement.notice {
+                        Text(notice).font(.caption).foregroundStyle(.secondary).lineLimit(2).frame(height: 32)
+                    }
                     if let error = workspaces.error {
                         Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange).lineLimit(2).frame(height: 28)
                         Text("Start AeroSpace, then refresh.").font(.caption).foregroundStyle(.secondary).frame(height: 14)
@@ -383,6 +388,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let workspaces = WorkspaceModel()
     let notifications = NotificationModel()
     let overviewState = OverviewState()
+    let placement = MenuPlacement()
+    private(set) var statusImage: NSImage?
+    private var overviewAnchor: (rect: NSRect, screen: NSScreen)?
     private(set) var naturalHeight: CGFloat = 240
     var item: NSStatusItem!
     private(set) var workspaceFrames: [String: NSRect] = [:]
@@ -428,7 +436,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return event
         }
         hosting = NSHostingController(rootView:
-            Overview(workspaces: workspaces, notifications: notifications,
+            Overview(workspaces: workspaces, notifications: notifications, placement: placement,
                      close: { [weak self] in self?.panel.dismiss() }, state: overviewState,
                      resized: { [weak self] height in self?.resizeOverview(to: height) }))
         hosting.sizingOptions = []
@@ -448,9 +456,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         workspaces.changed = { [weak self] in self?.updateStatus() }
         notifications.changed = { [weak self] in self?.updateStatus() }
         updateStatus()
-        if !CommandLine.arguments.contains("--menu-test") && !CommandLine.arguments.contains("--layout-test") {
+        let fixture = ["--menu-test", "--layout-test", "--placement-test"].contains { CommandLine.arguments.contains($0) }
+        if !fixture {
             workspaces.start()
             notifications.start()
+        }
+        let check = ["--menu-test", "--layout-test", "--placement-test", "--bell-click-test", "--popover-test"]
+            .contains { CommandLine.arguments.contains($0) }
+        if !check {
+            placement.start(item: item, image: { [weak self] in self?.statusImage },
+                click: { [weak self] point, time in self?.clickMenuBar(at: point, timestamp: time) })
         }
     }
 
@@ -477,8 +492,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bellImage.isTemplate = !hasBadges
         let frames = workspaceFrames
         let bellRect = bellFrame
-        // Drawing inside one standard status button keeps every workspace in Bartender's chosen section.
-        item.button?.image = NSImage(size: NSSize(width: x + 20, height: 22), flipped: true) { [weak self] _ in
+        // Share the same strip and hit regions between the native item and positioned displays.
+        statusImage = NSImage(size: NSSize(width: x + 20, height: 22), flipped: true) { [weak self] _ in
             guard let button = self?.item.button else { return false }
             for space in snapshot.menuSpaces {
                 let frame = frames[space]!
@@ -498,7 +513,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   width: size.width, height: size.height), in: button)
             return true
         }
+        if let statusImage {
+            item.button?.image = placement.usesOverlays
+                ? NSImage(size: statusImage.size, flipped: false) { _ in true } : statusImage
+        }
         item.length = x + 24
+        placement.updateImage()
+        placement.refresh()
     }
 
     func selectWorkspace(_ space: String) {
@@ -508,11 +529,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func workspaceTarget(at point: NSPoint) -> (space: String, bundle: String?)? {
+    private func workspaceTarget(at point: NSPoint, padding: CGFloat? = nil) -> (space: String, bundle: String?)? {
         guard let button = item.button,
               let space = menuOrder.first(where: { workspaceFrames[$0]!.contains(point) }) else { return nil }
         // App frames share the image's coordinates; the native button adds image padding.
-        let imagePoint = NSPoint(x: point.x - button.cell!.imageRect(forBounds: button.bounds).minX, y: 11)
+        let imagePoint = NSPoint(x: point.x - (padding ?? button.cell!.imageRect(forBounds: button.bounds).minX), y: 11)
         let bundle = appFrames[space]?.first(where: { $0.value.contains(imagePoint) })?.key
         return (space, bundle)
     }
@@ -520,6 +541,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func navigationArguments(at point: NSPoint) -> [String]? {
         guard let target = workspaceTarget(at: point) else { return nil }
         return workspaces.navigationArguments(to: target.space, appBundle: target.bundle)
+    }
+
+    private func menuPoint(at screenPoint: NSPoint) -> (point: NSPoint, padding: CGFloat)? {
+        if let overlay = placement.overlay(at: screenPoint), let view = overlay.contentView as? MenuStripView, view.scale > 0 {
+            return (NSPoint(x: (screenPoint.x - overlay.frame.minX - view.contentOriginX) / view.scale, y: 11), 2)
+        }
+        guard !placement.usesOverlays, let button = item.button, let window = button.window,
+              window.frame.contains(screenPoint) else { return nil }
+        let location = button.convert(window.convertPoint(fromScreen: screenPoint), from: nil)
+        return (NSPoint(x: location.x, y: button.bounds.midY), button.cell!.imageRect(forBounds: button.bounds).minX)
     }
 
     func menuNavigation(at screenPoint: NSPoint, timestamp: TimeInterval) -> (workspaceClick: Bool, arguments: [String]?) {
@@ -531,10 +562,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Keep the first app target even if switching rearranges the menu bar.
             return (true, workspaces.navigationArguments(to: previous.space, appBundle: previous.bundle, focusApp: true))
         }
-        guard let button = item.button, let window = button.window else { return (false, nil) }
-        let location = button.convert(window.convertPoint(fromScreen: screenPoint), from: nil)
-        let point = NSPoint(x: location.x, y: button.bounds.midY)
-        guard let target = workspaceTarget(at: point) else { return (false, nil) }
+        guard let location = menuPoint(at: screenPoint),
+              let target = workspaceTarget(at: location.point, padding: location.padding) else { return (false, nil) }
         if let bundle = target.bundle { lastAppClick = (target.space, bundle, screenPoint, timestamp) }
         return (true, workspaces.navigationArguments(to: target.space, appBundle: target.bundle))
     }
@@ -544,22 +573,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // macOS's menu bar host forwards mouse events at the item's center.
             clickMenuBar(at: NSEvent.mouseLocation, timestamp: event.timestamp)
         } else {
+            overviewAnchor = nil
             toggle()
         }
     }
 
     func clickMenuBar(at screenPoint: NSPoint, timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) {
-        guard let button = item.button, let window = button.window else { return }
         let navigation = menuNavigation(at: screenPoint, timestamp: timestamp)
         if navigation.workspaceClick {
             panel.dismiss()
             if let arguments = navigation.arguments { workspaces.perform(arguments, completion: {}) }
             return
         }
-        let location = button.convert(window.convertPoint(fromScreen: screenPoint), from: nil)
-        // The menu bar host can be taller than the button's drawing bounds.
-        let point = NSPoint(x: location.x, y: button.bounds.midY)
-        if bellFrame.contains(point) { toggle() }
+        guard let location = menuPoint(at: screenPoint), bellFrame.contains(location.point) else { return }
+        if let overlay = placement.overlay(at: screenPoint), let screen = overlay.screen,
+           let view = overlay.contentView as? MenuStripView {
+            overviewAnchor = (NSRect(x: overlay.frame.minX + view.contentOriginX + bellFrame.minX * view.scale,
+                y: overlay.frame.midY - 11 * view.scale, width: bellFrame.width * view.scale, height: 22 * view.scale), screen)
+        } else { overviewAnchor = nil }
+        toggle()
     }
 
     @objc func toggle() {
@@ -569,6 +601,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func dismissIfOutside(at point: NSPoint) {
         guard panel.isPresented, !panel.frame.contains(point) else { return }
+        if let location = menuPoint(at: point), bellFrame.contains(location.point) { return }
         if let button = item.button, let window = button.window {
             let bell = window.convertToScreen(button.convert(bellFrame, to: nil))
             if point.y >= window.frame.minY, point.y <= window.frame.maxY,
@@ -579,21 +612,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showOverview() {
         if panel.isPresented { panel.dismiss(); return }
-        guard let button = item.button, let window = button.window, let screen = window.screen else { return }
-        let anchor = window.convertToScreen(button.convert(bellFrame, to: nil))
+        guard let (anchor, screen) = popupAnchor() else { return }
         hosting.rootView.width = max(1, min(360, screen.visibleFrame.width - 28))
         fitOverview(visibleFrame: screen.visibleFrame, anchor: anchor)
-        if !CommandLine.arguments.contains("--layout-test") { workspaces.refresh() }
+        if !["--layout-test", "--placement-test"].contains(where: { CommandLine.arguments.contains($0) }) { workspaces.refresh() }
         panel.present()
     }
 
     private func resizeOverview(to height: CGFloat) {
         guard height > 0, abs(naturalHeight - height) > 0.5 else { return }
         naturalHeight = height
-        guard panel.isPresented, let button = item.button, let window = button.window,
-              let screen = window.screen else { return }
-        let anchor = window.convertToScreen(button.convert(bellFrame, to: nil))
+        guard panel.isPresented, let (anchor, screen) = popupAnchor() else { return }
         fitOverview(visibleFrame: screen.visibleFrame, anchor: anchor)
+    }
+
+    private func popupAnchor() -> (NSRect, NSScreen)? {
+        if let overviewAnchor { return (overviewAnchor.rect, overviewAnchor.screen) }
+        guard let button = item.button, let window = button.window, let screen = window.screen else { return nil }
+        return (window.convertToScreen(button.convert(bellFrame, to: nil)), screen)
     }
 
     private func fitOverview(visibleFrame: NSRect, anchor: NSRect) {
@@ -609,6 +645,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         workspaces.stop(); notifications.stop()
+        placement.stop()
         if let outsideClickMonitor { NSEvent.removeMonitor(outsideClickMonitor) }
         if let localClickMonitor { NSEvent.removeMonitor(localClickMonitor) }
     }

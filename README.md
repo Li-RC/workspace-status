@@ -18,6 +18,7 @@ Workspace Status is a native macOS menu bar app for [AeroSpace](https://nikitabo
 - **Direct navigation.** Click an inactive workspace or one of its apps to switch there. Click an app in the current workspace to focus it.
 - **Window browsing.** Expand a workspace in the dropdown to browse its open windows.
 - **Native appearance.** Uses Liquid Glass on macOS 26 and later.
+- **Display-aware placement.** Keeps the saved position on notched displays. On displays without a notch, centers the strip when space allows, or places it immediately after the application menus.
 - **Unread indicators.** An orange bell highlights apps with Dock badges. View those apps and their badge values under **Notifications**.
 - **Local operation.** Runs without network services or changes to your AeroSpace configuration.
 
@@ -28,7 +29,7 @@ Workspace Status is a native macOS menu bar app for [AeroSpace](https://nikitabo
 | macOS | 14 or later; native Liquid Glass requires macOS 26 or later |
 | Window manager | AeroSpace must be installed and running |
 | Architecture | Published binaries target Apple Silicon; source builds use the host architecture |
-| Accessibility | Optional; required only to read Dock badges |
+| Accessibility | Required for Dock badges and automatic placement on displays without a notch; workspace navigation works without it |
 
 ## Getting started
 
@@ -59,6 +60,14 @@ Click outside the dropdown or press **Escape** to close it. The dropdown fits yo
 
 Menu bar single clicks respond immediately. Dropdown app icons wait for the system double-click interval before acting, so the dropdown stays open long enough to receive a second click. Keyboard activation responds immediately.
 
+### Placement on multiple displays
+
+On a display **with a notch**, the strip stays at its existing menu bar position. On a display **without a notch**, it uses the center when the whole strip fits between application menus and status icons. Otherwise it appears just after the application menus, shrinking to fit the available gap when necessary. The dropdown opens beneath the bell on the display you clicked.
+
+Automatic placement requires Accessibility access to read menu bar positions. Without permission, or while those positions are unavailable, the normal macOS status item remains usable. If there is no gap at all, the positioned strip is hidden on that display until space becomes available. It follows menu bar visibility, including auto-hide and full-screen apps.
+
+This branch implements positioning using transparent AppKit panels because macOS does not provide a public API to center a status item independently on each display. When notched and non-notched displays are connected together, a transparent slot preserves the original position on the notched display. When every connected display has a notch, the original native status item is used directly.
+
 ## Notifications and privacy
 
 The **Notifications** section displays unread indicators from app badges in the Dock. To enable it:
@@ -67,7 +76,7 @@ The **Notifications** section displays unread indicators from app badges in the 
 2. Enable **Workspace Status** in **System Settings → Privacy & Security → Accessibility**.
 3. Leave the app running; it checks permission changes automatically.
 
-Workspace navigation works without this permission. Dock badges update automatically and show app names, icons, and badge values. Notification Center, notification banners, history, and message content are not read. Badge information is neither persisted nor sent to a server.
+Workspace navigation works without this permission. Accessibility is also used to read menu bar geometry for placement on displays without a notch. Dock badges update automatically and show app names, icons, and badge values. Notification Center, notification banners, history, and message content are not read. Badge information is neither persisted nor sent to a server.
 
 Keep the app in a stable location before granting Accessibility access. Moving or rebuilding it may require granting permission again.
 
@@ -76,7 +85,7 @@ Keep the app in a stable location before granting Accessibility access. Moving o
 - Workspace navigation supports **AeroSpace workspaces**. macOS Mission Control desktops are not supported.
 - Dock badges represent app unread counts or status; they do not confirm a new notification. Apps without an exposed Dock badge will not appear under Notifications.
 - macOS may hide indicators when the menu bar is crowded. Occupied workspaces and their applications remain available in the dropdown.
-- Bartender manages all workspace indicators and the bell as a single group; individual workspaces cannot be moved or hidden separately.
+- With only notched displays, Bartender manages all workspace indicators and the bell as a single native group. When a display without a notch is connected, the positioned panels are outside Bartender's control; the reserved native slot remains grouped. Individual workspaces cannot be moved or hidden separately.
 
 ## Build from source
 

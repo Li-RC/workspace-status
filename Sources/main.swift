@@ -35,6 +35,25 @@ if args.contains("--self-test") {
     precondition(secondarySize.width + 28 <= secondaryScreen.width && secondarySize.height + 28 <= secondaryScreen.height)
     let tallSize = overviewSize(visibleFrame: shortScreen, anchor: NSRect(x: 600, y: 540, width: 24, height: 24), contentHeight: 1800)
     precondition(tallSize.height + 28 <= shortScreen.height && tallSize.width < 360)
+    let display = NSRect(x: 0, y: 0, width: 1440, height: 900)
+    let saved = NSRect(x: 1020, y: 876, width: 320, height: 24)
+    func strip(_ screen: NSRect = display, notch: Bool = false, menus: CGFloat = 480,
+               status: CGFloat = 1120, width: CGFloat = 320) -> NSRect? {
+        menuStripFrame(screen: screen, hasNotch: notch, native: saved, menuEnd: menus,
+                       statusStart: status, width: width, height: 24)
+    }
+    precondition(strip(notch: true, menus: 1200) == saved, "Notched display lost its saved position")
+    precondition(strip() == NSRect(x: 560, y: 876, width: 320, height: 24), "A clear center was not used")
+    precondition(strip(menus: 600)?.minX == 608, "Long app menus should place the strip just after them")
+    precondition(strip(menus: 400, status: 850)?.minX == 408, "Right-side icons overlapped a centered strip")
+    precondition(strip(menus: 700, status: 900)?.width == 184, "A crowded bar overlapped other icons")
+    precondition(strip(menus: 900, status: 900) == nil, "A strip was drawn without any available space")
+    let offsetDisplay = NSRect(x: -1600, y: -400, width: 1600, height: 1000)
+    precondition(strip(offsetDisplay, menus: -1200, status: -300)?.midX == -800,
+                 "A secondary display was centered using primary-display coordinates")
+    precondition(menuStripFrame(screen: display, hasNotch: true, native: nil, menuEnd: 0,
+        statusStart: 1440, width: 320, height: 24) == nil, "A missing native slot invented a notched position")
+    print("PASS: saved notched position; non-notched centering, after-menus placement, crowded bars and display offsets.")
     let fixture = menuFixture()
     precondition(fixture.occupiedSpaces == ["1", "2", "10"])
     precondition(fixture.menuSpaces == ["1", "2", "3", "10"])
@@ -103,6 +122,75 @@ if args.contains("--self-test") {
                 exit(0)
             }
         }
+    }
+    application.run()
+} else if args.contains("--placement-test") {
+    let application = NSApplication.shared
+    let delegate = AppDelegate()
+    application.delegate = delegate
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        let fixture = menuFixture()
+        delegate.workspaces.snapshot = Snapshot(spaces: fixture.spaces, current: "1", windows: fixture.windows)
+        delegate.updateStatus()
+        let item = delegate.item!
+        let button = item.button!, native = button.window!
+        let screen = native.screen!
+        let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID
+        let nativeFrame = native.convertToScreen(button.convert(button.bounds, to: nil))
+        let requestedFrame = NSRect(x: nativeFrame.minX, y: screen.frame.maxY - 39, width: item.length * 0.75, height: 39)
+        // Install the real renderer and click callback without starting live geometry polling.
+        delegate.placement.start(item: item, image: { delegate.statusImage },
+            click: { point, time in delegate.clickMenuBar(at: point, timestamp: time) })
+        delegate.placement.stop()
+        delegate.placement.display(frames: [id: requestedFrame], reserveNativeSlot: false)
+        let overlay = delegate.placement.overlays[id]!
+        let frame = overlay.frame
+        let view = overlay.contentView as! MenuStripView
+        precondition(!item.isVisible && delegate.placement.usesOverlays && overlay.isVisible)
+        precondition(!overlay.isOpaque && !overlay.hasShadow && abs(view.scale - 0.75) <= 1 / item.length,
+                     "Positioned strip opacity=\(overlay.isOpaque), shadow=\(overlay.hasShadow), scale=\(view.scale), bounds=\(view.bounds)")
+        precondition(view.image?.tiffRepresentation != nil, "The positioned strip lost its image when the native item was hidden")
+        func point(_ x: CGFloat, _ y: CGFloat? = nil) -> NSPoint {
+            NSPoint(x: frame.minX + x * view.scale, y: y ?? frame.midY)
+        }
+        let preview = delegate.appFrames["2"]!["com.apple.Preview"]!
+        let finder = delegate.appFrames["1"]!["com.apple.finder"]!
+        for (index, y) in [frame.minY + 1, frame.midY, frame.maxY - 1].enumerated() {
+            precondition(delegate.menuNavigation(at: point(preview.midX + 2, y), timestamp: Double(index * 10 + 1)).arguments == ["workspace", "2"],
+                         "An inactive app in the positioned strip did not switch its workspace")
+        }
+        precondition(delegate.menuNavigation(at: point(finder.midX + 2), timestamp: 40).arguments == ["focus", "--window-id", "0"],
+                     "An active app in the positioned strip did not focus")
+        let previewPoint = point(preview.midX + 2)
+        precondition(delegate.menuNavigation(at: previewPoint, timestamp: 50).arguments == ["workspace", "2"])
+        precondition(delegate.menuNavigation(at: previewPoint, timestamp: 50 + NSEvent.doubleClickInterval / 2).arguments == ["focus", "--window-id", "21"])
+        delegate.workspaces.snapshot = Snapshot(spaces: fixture.spaces, current: "2", windows: fixture.windows)
+        delegate.updateStatus()
+        precondition(view.image === delegate.statusImage && view.contentWidth == item.length,
+                     "The positioned strip showed stale icons while click regions updated")
+        precondition(delegate.menuNavigation(at: previewPoint, timestamp: 55).arguments == ["focus", "--window-id", "21"])
+        delegate.placement.display(frames: [id: frame], reserveNativeSlot: true)
+        precondition(item.isVisible, "A mixed-display setup lost its reserved native position")
+        let bell = point(delegate.bellFrame.midX)
+        delegate.clickMenuBar(at: bell)
+        precondition(delegate.panel.isPresented, "A positioned bell could not open the dropdown")
+        precondition(delegate.panel.frame.maxY <= frame.minY && screen.visibleFrame.contains(delegate.panel.frame),
+                     "The positioned bell anchored the dropdown to the wrong screen")
+        delegate.dismissIfOutside(at: point(delegate.bellFrame.midX, frame.maxY - 1))
+        precondition(delegate.panel.isPresented, "The positioned bell was treated as an outside click")
+        let eventPoint = overlay.convertPoint(fromScreen: bell)
+        let event = NSEvent.mouseEvent(with: .leftMouseDown, location: eventPoint, modifierFlags: [],
+            timestamp: 60, windowNumber: overlay.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
+        view.mouseDown(with: event)
+        precondition(!delegate.panel.isPresented, "A real overlay mouse event failed to toggle the dropdown closed")
+        precondition(view.accessibilityPerformPress() && delegate.panel.isPresented,
+                     "Accessibility activation could not open the positioned dropdown")
+        delegate.panel.dismiss()
+        delegate.placement.stop()
+        precondition(item.isVisible && !delegate.placement.usesOverlays && !overlay.isVisible)
+        precondition(item.button?.image === delegate.statusImage, "Stopping placement did not restore the native strip")
+        print("Positioned strip rendering, scaled clicks, app focus, double click, bell toggle, popup anchoring and native restoration: PASS")
+        exit(0)
     }
     application.run()
 } else if args.contains("--menu-test") {
@@ -415,11 +503,17 @@ if args.contains("--self-test") {
 } else if args.contains("--diagnose") {
     do {
         let snapshot = try AeroSpace.snapshot()
-        let result: [String: Any] = ["currentWorkspace": snapshot.current, "workspaces": snapshot.spaces,
+        var result: [String: Any] = ["currentWorkspace": snapshot.current, "workspaces": snapshot.spaces,
             "windowCount": snapshot.windows.count, "accessibilityEnabled": AXIsProcessTrusted(),
             "appsByWorkspace": Dictionary(uniqueKeysWithValues: snapshot.spaces.map {
                 ($0, Array(Set(snapshot.windows(in: $0).map(\.app))).sorted())
             })]
+        let screens = NSScreen.screens
+        if AXIsProcessTrusted(), let geometry = MenuGeometry.read(top: screens.first?.frame.maxY ?? 0) {
+            result["menuPlacement"] = ["applicationMenuWidth": geometry.menuWidth,
+                "visibleMenuBars": geometry.bars.count, "statusIconCount": geometry.statusItems.count,
+                "displays": screens.count, "notchedDisplays": screens.filter { $0.auxiliaryTopLeftArea != nil }.count]
+        }
         let data = try JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys])
         print(String(data: data, encoding: .utf8)!)
     } catch { fputs("\(error.localizedDescription)\n", stderr); exit(1) }
@@ -428,7 +522,7 @@ if args.contains("--self-test") {
     NSApp.setActivationPolicy(.accessory)
     let workspace = WorkspaceModel(), notifications = NotificationModel()
     workspace.snapshot = try AeroSpace.snapshot()
-    var overview = Overview(workspaces: workspace, notifications: notifications, close: {}, state: OverviewState(), resized: { _ in })
+    var overview = Overview(workspaces: workspace, notifications: notifications, placement: MenuPlacement(), close: {}, state: OverviewState(), resized: { _ in })
     overview.canvasHeight = overview.contentHeight
     let hosting = NSHostingView(rootView: overview)
     hosting.frame = NSRect(x: 0, y: 0, width: 360, height: overview.contentHeight)
@@ -447,6 +541,73 @@ if args.contains("--self-test") {
         .contains(where: { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }) { exit(0) }
     let delegate = AppDelegate()
     application.delegate = delegate
+    if args.contains("--placement-live-test") {
+        guard let index = args.firstIndex(of: "--menu-command"), args.count > index + 1 else {
+            print("FAIL: start Tests/MenuFixture.swift and provide its --menu-command file"); exit(1)
+        }
+        let commandURL = URL(fileURLWithPath: args[index + 1])
+        func setMenus(long: Bool) {
+            try! (long ? "long" : "short").write(to: commandURL, atomically: true, encoding: .utf8)
+            delegate.placement.refresh()
+        }
+        var notchedFrames: [CGDirectDisplayID: NSRect] = [:]
+        func check(long: Bool) {
+            guard delegate.placement.usesOverlays else {
+                print("FAIL: live placement unavailable; Accessibility=\(AXIsProcessTrusted()), reason=\(delegate.placement.notice ?? "none")")
+                exit(1)
+            }
+            var externalCount = 0
+            for screen in NSScreen.screens {
+                let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID
+                guard let overlay = delegate.placement.overlays[id], overlay.isVisible,
+                      let view = overlay.contentView as? MenuStripView else {
+                    print("FAIL: no strip on \(screen.localizedName)"); exit(1)
+                }
+                print("Live \(long ? "long" : "short") menus: \(screen.localizedName), strip=\(overlay.frame), menu width=\(delegate.placement.menuWidth)")
+                if screen.auxiliaryTopLeftArea != nil {
+                    if long { precondition(overlay.frame == notchedFrames[id], "The notched display moved when app menus changed") }
+                    else { notchedFrames[id] = overlay.frame }
+                } else {
+                    externalCount += 1
+                    let statusStart = delegate.placement.statusStarts[id]!
+                    let left = screen.frame.minX + delegate.placement.menuWidth + 8
+                    let centered = screen.frame.midX - view.contentWidth / 2
+                    let canCenter = centered >= left && centered + view.contentWidth <= statusStart - 8
+                    if canCenter {
+                        precondition(abs(overlay.frame.midX - screen.frame.midX) <= 1,
+                                     "The external strip was not centered when there was room")
+                        print("External placement: CENTER")
+                    } else {
+                        precondition(abs(overlay.frame.minX - (screen.frame.minX + delegate.placement.menuWidth + 8)) <= 1,
+                                     "The external strip was not placed after menus in a crowded bar")
+                        print("External placement: AFTER MENUS (status icons start at \(statusStart))")
+                    }
+                    precondition(overlay.frame.maxX <= statusStart - 7, "The strip overlapped another status icon")
+                }
+                let point = NSPoint(x: overlay.frame.minX + view.contentOriginX + delegate.bellFrame.midX * view.scale, y: overlay.frame.midY)
+                delegate.clickMenuBar(at: point)
+                precondition(delegate.panel.isPresented && screen.visibleFrame.contains(delegate.panel.frame),
+                             "The live dropdown opened on the wrong display")
+                delegate.dismissIfOutside(at: point)
+                precondition(delegate.panel.isPresented)
+                delegate.clickMenuBar(at: point)
+                precondition(!delegate.panel.isPresented, "The live bell did not toggle closed")
+            }
+            precondition(externalCount > 0, "Connect a display without a notch for the live placement test")
+            if long {
+                print("Live notched position, external centering, after-menu placement and per-display bell dropdowns: PASS")
+                delegate.placement.stop(); delegate.workspaces.stop(); delegate.notifications.stop()
+                exit(0)
+            } else {
+                setMenus(long: true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { check(long: true) }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            setMenus(long: false)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { check(long: false) }
+        }
+    }
     if args.contains("--smoke-test") {
         DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
             let healthy = !delegate.workspaces.snapshot.spaces.isEmpty && delegate.workspaces.error == nil
@@ -456,6 +617,10 @@ if args.contains("--self-test") {
             print("Workspaces: \(delegate.workspaces.snapshot.spaces.count)")
             print("Notification monitor: \(delegate.notifications.monitorStatus)")
             print("Dock apps with badges: \(delegate.notifications.badges.count)")
+            if let button = delegate.item.button, let window = button.window {
+                print("Native item visible: \(delegate.item.isVisible), window visible: \(window.isVisible), frame: \(window.frame)")
+                print("Native button frame: \(button.frame), accessibility frame: \(button.accessibilityFrame())")
+            }
             if let error = delegate.workspaces.error { print(error) }
             delegate.workspaces.stop(); delegate.notifications.stop()
             exit(healthy ? 0 : 1)
