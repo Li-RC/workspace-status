@@ -6,6 +6,12 @@ Bug reports and pull requests are welcome. For a bug report, include your macOS 
 
 Follow the [build instructions](README.md#build-from-source) to build the app locally. The build uses Xcode's asset compiler for the editable Icon Composer project, alongside the Swift compiler.
 
+## Continuous integration
+
+The **Build and test** GitHub Action runs on pushes to `main`, pull requests targeting `main`, and manual runs. It builds the app and its Icon Composer assets on `macos-26`, runs the self-tests included in `build.sh`, and verifies the app signature. CI explicitly uses ad-hoc signing and needs no signing certificate or secrets. It does not publish releases or upload app bundles.
+
+Interactive UI, Accessibility permissions, AeroSpace integration and external-display behavior still require the local checks below.
+
 ## Developer checks and previews
 
 Run checks from the repository root. Quit any running Workspace Status instance before the UI checks so duplicate menu bar items do not affect ordering:
