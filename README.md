@@ -98,7 +98,16 @@ bash build.sh
 open "dist/Workspace Status.app"
 ```
 
-The script builds for your Mac's architecture and runs self-tests. The app bundle is written to `dist/Workspace Status.app`. Local builds are ad-hoc signed and are not notarized.
+The script builds for your Mac's architecture and runs self-tests. The app bundle is written to `dist/Workspace Status.app`. Builds use ad-hoc signing unless a certificate is configured, and are not notarized.
+
+To use a persistent signing certificate from your Keychain, save its name or fingerprint in the ignored local configuration file:
+
+```sh
+printf '%s\n' 'Workspace Status Local' > .signing-identity
+bash build.sh
+```
+
+You can override the local configuration with `WORKSPACE_STATUS_SIGNING_IDENTITY`. A configured certificate must be available; the build does not silently fall back to ad-hoc signing. Keep the same certificate, bundle identifier and installation path across updates to preserve the app's identity. Switching from ad-hoc signing may require granting Accessibility permission once more; subsequent permission retention should be verified on your Mac. Local self-signed certificates are for development; public releases should use Developer ID signing and notarization.
 
 ## Contributing
 

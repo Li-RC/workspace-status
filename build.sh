@@ -2,6 +2,11 @@
 set -euo pipefail
 project_dir="$(cd "$(dirname "$0")" && pwd)"
 app_dir="$project_dir/dist/Workspace Status.app"
+signing_identity="${WORKSPACE_STATUS_SIGNING_IDENTITY:-}"
+if [[ -z "$signing_identity" && -f "$project_dir/.signing-identity" ]]; then
+  signing_identity="$(cat "$project_dir/.signing-identity")"
+fi
+signing_identity="${signing_identity:--}"
 build_cache="$(mktemp -d "${TMPDIR:-/tmp/}workspace-status.XXXXXX")"
 trap 'rm -rf "$build_cache"' EXIT
 mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
@@ -30,6 +35,6 @@ cat > "$app_dir/Contents/Info.plist" <<'PLIST'
 </dict></plist>
 PLIST
 /usr/libexec/PlistBuddy -c "Merge '$build_cache/icon-info.plist'" "$app_dir/Contents/Info.plist"
-codesign --force --sign - --identifier local.WorkspaceStatus "$app_dir"
+codesign --force --sign "$signing_identity" --identifier local.WorkspaceStatus "$app_dir"
 "$app_dir/Contents/MacOS/WorkspaceStatus" --self-test
 printf 'Built %s\n' "$app_dir"
