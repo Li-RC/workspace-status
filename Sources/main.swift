@@ -44,6 +44,8 @@ if args.contains("--self-test") {
     let model = WorkspaceModel()
     model.snapshot = Snapshot(spaces: fixture.spaces, current: "1", windows: fixture.windows)
     precondition(model.navigationArguments(to: "2", appBundle: "com.apple.Preview") == ["workspace", "2"])
+    precondition(model.navigationArguments(to: "2", appBundle: "com.apple.Preview", focusApp: true) == ["focus", "--window-id", "21"])
+    precondition(model.navigationArguments(to: "2", appBundle: "missing.app", focusApp: true) == nil)
     precondition(model.navigationArguments(to: "1") == nil)
     precondition(model.navigationArguments(to: "1", appBundle: "com.apple.finder") == ["focus", "--window-id", "0"])
     model.consumeEvents(Data(#"{"_event":"focus-changed","windowId":20}"#.utf8))
@@ -61,6 +63,48 @@ if args.contains("--self-test") {
     precondition(model.navigationArguments(to: "1", appBundle: "missing.app") == nil)
     print("PASS: inactive switching, current-app focus, streamed focus history and closed-window fallback.")
     print("PASS: JSON, screen sizing, workspace ordering/filtering and all-app deduplication.")
+} else if args.contains("--app-click-test") {
+    let application = NSApplication.shared
+    application.setActivationPolicy(.accessory)
+    let button = AppClickButton(frame: NSRect(x: 0, y: 0, width: 20, height: 20))
+    var actions: [String] = []
+    button.singleClick = { actions.append("single") }
+    button.doubleClick = { actions.append("double") }
+    button.target = button
+    button.action = #selector(AppClickButton.activate)
+    let hosting = NSHostingView(rootView: WorkspaceAppButton(bundle: "com.apple.finder", name: "Finder",
+        current: false, space: "1", singleClick: {}, doubleClick: {}).frame(width: 20, height: 20))
+    hosting.frame = NSRect(x: 0, y: 0, width: 20, height: 20)
+    hosting.layoutSubtreeIfNeeded()
+    func findButton(in view: NSView) -> AppClickButton? {
+        (view as? AppClickButton) ?? view.subviews.compactMap { findButton(in: $0) }.first
+    }
+    let hostedButton = findButton(in: hosting)!
+    precondition(hostedButton.frame.size == NSSize(width: 20, height: 20), "App buttons changed the icon layout")
+    func click(_ count: Int) { button.handleMouseClick(count: count) }
+    let wait = NSEvent.doubleClickInterval + 0.15
+    click(1)
+    precondition(actions.isEmpty, "An inactive app switched before double-click recognition")
+    click(2)
+    precondition(actions == ["double"])
+    DispatchQueue.main.asyncAfter(deadline: .now() + wait) {
+        precondition(actions == ["double"], "A double-click also ran the pending single click")
+        actions = []
+        click(1)
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait) {
+            precondition(actions == ["single"], "An inactive app single click never completed")
+            actions = []
+            click(1)
+            button.performClick(nil)
+            precondition(actions == ["single"], "Keyboard activation did not act immediately")
+            DispatchQueue.main.asyncAfter(deadline: .now() + wait) {
+                precondition(actions == ["single"], "Keyboard activation left a duplicate pending click")
+                print("Dropdown app single/double clicks, cancellation and keyboard activation: PASS")
+                exit(0)
+            }
+        }
+    }
+    application.run()
 } else if args.contains("--menu-test") {
     let application = NSApplication.shared
     let delegate = AppDelegate()
@@ -127,13 +171,33 @@ if args.contains("--self-test") {
             delegate.workspaces.snapshot = fixture
             delegate.updateStatus()
             print("Whole inactive groups switch; all active app icons focus their own most recent window: PASS")
+            let window = button.window!
+            let previewFrame = delegate.appFrames["2"]!["com.apple.Preview"]!
+            let previewPoint = window.convertPoint(toScreen: button.convert(
+                NSPoint(x: previewFrame.midX + imageRect.minX, y: 11), to: nil))
+            precondition(delegate.menuNavigation(at: previewPoint, timestamp: 10).arguments == ["workspace", "2"])
+            precondition(delegate.menuNavigation(at: previewPoint, timestamp: 10 + NSEvent.doubleClickInterval / 2).arguments == ["focus", "--window-id", "21"],
+                         "A double-click did not focus an app in an inactive workspace")
+            precondition(delegate.menuNavigation(at: previewPoint, timestamp: 20).arguments == ["workspace", "2"])
+            delegate.workspaces.snapshot = Snapshot(spaces: fixture.spaces + ["0"], current: "2",
+                windows: fixture.windows + [AppWindow(id: 200, app: "Finder", bundle: "com.apple.finder", title: "Layout change", workspace: "0")])
+            delegate.updateStatus()
+            precondition(delegate.menuNavigation(at: previewPoint, timestamp: 20 + NSEvent.doubleClickInterval / 2).arguments == ["focus", "--window-id", "21"],
+                         "Menu bar rearrangement changed the double-click's app target")
+            delegate.workspaces.snapshot = fixture
+            delegate.updateStatus()
+            precondition(delegate.menuNavigation(at: previewPoint, timestamp: 30).arguments == ["workspace", "2"])
+            precondition(delegate.menuNavigation(at: previewPoint, timestamp: 30 + NSEvent.doubleClickInterval + 0.1).arguments == ["workspace", "2"],
+                         "Separate single clicks were mistaken for a double-click")
+            let bellPoint = window.convertPoint(toScreen: button.convert(NSPoint(x: delegate.bellFrame.midX, y: 11), to: nil))
+            precondition(!delegate.menuNavigation(at: bellPoint, timestamp: 40).workspaceClick)
+            print("Inactive app double-click focus, original target after rearrangement and system click timing: PASS")
             if let index = args.firstIndex(of: "--render-menu-preview"), args.count > index + 1 {
                 let bitmap = button.bitmapImageRepForCachingDisplay(in: button.bounds)!
                 button.cacheDisplay(in: button.bounds, to: bitmap)
                 try! bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[index + 1]))
             }
             let frame = delegate.workspaceFrames[fixture.current]!
-            let window = button.window!
             let workspacePoint = window.convertPoint(toScreen: button.convert(NSPoint(x: frame.midX, y: frame.midY), to: nil))
             for y in [window.frame.minY + 1, workspacePoint.y, window.frame.maxY - 1] {
                 delegate.clickMenuBar(at: NSPoint(x: workspacePoint.x, y: y))
@@ -273,6 +337,8 @@ if args.contains("--self-test") {
             print("Content size: \(delegate.panel.contentView!.bounds.size)")
             print("Popup opacity: \(window.alphaValue)")
             precondition(window.alphaValue > 0.99, "Popup fade did not complete")
+            precondition((view.layer?.opacity ?? 0) > 0.99 && (view.layer?.presentation()?.opacity ?? 1) > 0.99,
+                         "Popup content fade did not complete")
             print("Status button flipped: \(delegate.item.button?.isFlipped ?? false)")
             precondition(!window.styleMask.contains(.titled), "Popup has window chrome")
             precondition(window.backgroundColor == .clear && !window.isOpaque, "Popup background is not borderless")
@@ -312,6 +378,8 @@ if args.contains("--self-test") {
                     delegate.toggle()
                 case 1:
                     precondition(delegate.panel.isVisible && delegate.panel.alphaValue > 0.99, "Open animation did not finish")
+                    precondition((view.layer?.opacity ?? 0) > 0.99 && (view.layer?.presentation()?.opacity ?? 1) > 0.99,
+                                 "Reopened popup content stayed transparent")
                     precondition(delegate.panel.contentView?.layer?.transform.m42 == 0, "Open animation left content displaced")
                     delegate.panel.cancelOperation(nil)
                 case 2:
@@ -331,6 +399,8 @@ if args.contains("--self-test") {
                     precondition(delegate.panel.isPresented && delegate.panel.isVisible && delegate.panel.alphaValue > 0.99,
                                  "Interrupted close animation hid the reopened popup")
                     precondition(delegate.panel.contentView?.layer?.transform.m42 == 0, "Rapid toggles left content displaced")
+                    precondition((view.layer?.opacity ?? 0) > 0.99 && (view.layer?.presentation()?.opacity ?? 1) > 0.99,
+                                 "Rapid toggles left content transparent")
                     print("Bell mouse-down exclusion, animated toggle, outside click and Escape dismissal: PASS")
                     print("Rapid close/reopen keeps the dropdown visible and fully opaque: PASS")
                     delegate.workspaces.stop(); delegate.notifications.stop()
