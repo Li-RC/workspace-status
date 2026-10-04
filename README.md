@@ -18,7 +18,7 @@ Workspace Status is a native macOS menu bar app for [AeroSpace](https://nikitabo
 - **Direct navigation.** Switch workspaces from the menu bar, or use the dropdown to select an app or a specific window.
 - **Window browsing.** Expand a workspace in the dropdown to browse its open windows.
 - **Native appearance.** Uses Liquid Glass on macOS 26 and later.
-- **Unread indicators.** An orange bell highlights apps with Dock badges. View those apps and their badge values under **Notifications**.
+- **Unread indicators.** The bell highlights apps with Dock badges using your macOS accent color. View those apps and their badge values under **Notifications**.
 - **Local operation.** Runs without network services or changes to your AeroSpace configuration.
 
 ## Requirements
