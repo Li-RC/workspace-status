@@ -1,7 +1,15 @@
 <div align="center">
-  <img src="Design/AppIcon/preview.png" width="112" height="112" alt="Workspace Status app icon" />
+  <img src="Design/AppIcon/preview.png" width="112" height="112" alt="Workspace Status, a native AeroSpace workspace switcher for the macOS menu bar" />
   <h1>Workspace Status</h1>
-  <p>Your AeroSpace workspaces, applications, and unread indicators — at a glance.</p>
+  <p>A native macOS menu bar workspace switcher for AeroSpace.</p>
+  <p>
+    <a href="LICENSE"><img src="https://img.shields.io/github/license/Li-RC/workspace-status?label=license&amp;color=blue" alt="License: MIT" /></a>
+    <a href="#requirements"><img src="https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&amp;logoColor=white" alt="macOS 14 or later" /></a>
+    <a href="#build-from-source"><img src="https://img.shields.io/badge/Built_with-Swift-F05138?logo=swift&amp;logoColor=white" alt="Built with Swift" /></a>
+    <a href="https://github.com/Li-RC/workspace-status/releases/latest"><img src="https://img.shields.io/github/v/release/Li-RC/workspace-status?label=release" alt="Latest GitHub release" /></a>
+    <a href="https://github.com/Li-RC/workspace-status/releases"><img src="https://img.shields.io/github/downloads/Li-RC/workspace-status/total?label=downloads" alt="Total release asset downloads" /></a>
+    <a href="https://github.com/Li-RC/workspace-status/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/Li-RC/workspace-status/build.yml?branch=main&amp;label=build&amp;logo=github" alt="macOS build and self-test status on main" /></a>
+  </p>
   <p>
     <a href="https://github.com/Li-RC/workspace-status/releases/latest">Download</a> ·
     <a href="#getting-started">Getting started</a> ·
@@ -10,12 +18,14 @@
   </p>
 </div>
 
-Workspace Status is a native macOS menu bar app for [AeroSpace](https://nikitabobko.github.io/AeroSpace/). See which apps are open across your workspaces, switch between them, and focus a window from a compact dropdown.
+Workspace Status is an **AeroSpace workspace indicator and switcher for the native macOS menu bar**. See your active workspace, the applications open in each workspace, and unread app badges without opening Mission Control. Click a workspace to switch, click an app to focus its window, or open the bell dropdown for a window overview.
+
+Built with **Swift, SwiftUI and AppKit**, it brings **Liquid Glass** controls to macOS 26 and later, with a fallback interface on macOS 14 and 15. It works alongside the [AeroSpace tiling window manager](https://nikitabobko.github.io/AeroSpace/) as a standalone menu bar app, without requiring SketchyBar or a custom bar configuration.
 
 ## Features
 
 - **Workspace overview.** See occupied workspaces and their open apps, with your current workspace highlighted.
-- **Direct navigation.** Click an inactive workspace or one of its apps to switch there. Click an app in the current workspace to focus it.
+- **Workspace and app switching.** Click anywhere in an inactive workspace group to switch there. Click an app in the current workspace to focus it, or double-click an app to focus it from any workspace.
 - **Window browsing.** Expand a workspace in the dropdown to browse its open windows.
 - **Native appearance.** Uses Liquid Glass on macOS 26 and later.
 - **Display-aware placement.** Keeps the saved position on notched displays. On displays without a notch, centers the strip when space allows, or places it immediately after the application menus.
@@ -38,6 +48,8 @@ Workspace Status is a native macOS menu bar app for [AeroSpace](https://nikitabo
 3. Start AeroSpace, then open **Workspace Status**.
 
 The app runs in the menu bar without a Dock icon. To start it at login, add it in **System Settings → General → Login Items**.
+
+This README describes the current source on `main`. Check the release notes for features included in a downloaded version.
 
 ## Using Workspace Status
 
@@ -66,7 +78,7 @@ On a display **with a notch**, the strip stays at its existing menu bar position
 
 Automatic placement requires Accessibility access to read menu bar positions. Without permission, or while those positions are unavailable, the normal macOS status item remains usable. If there is no gap at all, the positioned strip is hidden on that display until space becomes available. It follows menu bar visibility, including auto-hide and full-screen apps.
 
-This branch implements positioning using transparent AppKit panels because macOS does not provide a public API to center a status item independently on each display. When notched and non-notched displays are connected together, a transparent slot preserves the original position on the notched display. When every connected display has a notch, the original native status item is used directly.
+Workspace Status implements positioning using transparent AppKit panels because macOS does not provide a public API to center a status item independently on each display. When notched and non-notched displays are connected together, a transparent slot preserves the original position on the notched display. When every connected display has a notch, the original native status item is used directly.
 
 ## Notifications and privacy
 
@@ -108,6 +120,16 @@ bash build.sh
 ```
 
 You can override the local configuration with `WORKSPACE_STATUS_SIGNING_IDENTITY`. A configured certificate must be available; the build does not silently fall back to ad-hoc signing. Keep the same certificate, bundle identifier and installation path across updates to preserve the app's identity. Switching from ad-hoc signing may require granting Accessibility permission once more; subsequent permission retention should be verified on your Mac. Local self-signed certificates are for development; public releases should use Developer ID signing and notarization.
+
+## Frequently asked questions
+
+### Do I need SketchyBar?
+
+No. Workspace Status is a standalone macOS menu bar app. It displays AeroSpace workspace numbers and application icons directly in the menu bar, without installing or configuring a separate status bar.
+
+### Does it support macOS Spaces or Mission Control desktops?
+
+Workspace switching uses AeroSpace workspaces. It does not switch macOS Spaces or Mission Control desktops. AeroSpace must be running to load workspaces and focus windows.
 
 ## Contributing
 
