@@ -52,14 +52,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.level = .popUpMenu
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            self?.dismissIfOutside(at: NSEvent.mouseLocation)
-        }
-        localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            let point = event.window === self?.item.button?.window ? NSEvent.mouseLocation :
-                (event.window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation)
-            self?.dismissIfOutside(at: point)
-            return event
+        // Isolate synthetic resizing from real clicks; bell/popup checks verify dismissal.
+        if !CommandLine.arguments.contains("--layout-test") {
+            outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                self?.dismissIfOutside(at: NSEvent.mouseLocation)
+            }
+            localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                let point = event.window === self?.item.button?.window ? NSEvent.mouseLocation :
+                    (event.window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation)
+                self?.dismissIfOutside(at: point)
+                return event
+            }
         }
         hosting = NSHostingController(rootView:
             Overview(workspaces: workspaces, notifications: notifications, placement: placement,
