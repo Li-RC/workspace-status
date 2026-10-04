@@ -21,6 +21,7 @@ Keep the test app visible in Bartender or any other menu bar manager. A hidden i
 ```sh
 app_binary="dist/Workspace Status.app/Contents/MacOS/WorkspaceStatus"
 "$app_binary" --diagnose
+"$app_binary" --settings-test
 "$app_binary" --menu-test
 "$app_binary" --app-click-test
 "$app_binary" --placement-test
@@ -31,7 +32,8 @@ app_binary="dist/Workspace Status.app/Contents/MacOS/WorkspaceStatus"
 
 | Check | Coverage |
 | --- | --- |
-| `--self-test` | JSON decoding, workspace ordering and filtering, app deduplication, display size limits, placement around menus/status icons and across display coordinates, streamed focus history, and workspace-specific app selection; also runs during the build |
+| `--self-test` | JSON decoding, workspace ordering/filtering, app deduplication, placement and sizing, streamed focus history, settings persistence, and injected login registration/approval/error states; also runs during the build |
+| `--settings-test` | Single settings window, close/reopen and keyboard commands, bell-only context menus for native/positioned strips, immediate preferences and onscreen window recovery; uses an isolated defaults suite and does not register login items |
 | `--diagnose` | Live workspace and application data, Accessibility state, and menu geometry counts when permission is available; excludes window titles |
 | `--smoke-test` | Eight-second run checking live workspace loading and menu bar image creation; quit any existing instance first |
 | `--menu-test` | Native menu bar ordering, complete app icons, compact spacing, single/double click routing, preserved app targets after rearrangement, and a persistent grouped item through workspace insertion and removal |
@@ -63,12 +65,18 @@ To capture the native dropdown over the desktop:
 
 This requires screen capture access and exports both the window image and a `-composited.png` preview. Other preview options are `--render-menu-preview <file>` with `--menu-test`, `--render-layout-preview <prefix>` with `--layout-test`, and `--render-preview <file>` for an offscreen layout. Offscreen previews do not reproduce native glass composition.
 
+Use `--settings-test --render-settings-preview <file>` for a settings window preview, or add `--hold-settings-preview` to inspect the native controls interactively. Login registration tests use injected service responses; separately verify registration/removal and approval against an installed signed app. Do not enable login registration for a temporary test bundle.
+
 ## Project structure
 
 | Path | Purpose |
 | --- | --- |
 | `Sources/main.swift` | Command dispatch, duplicate-instance guard and app startup |
 | `Sources/App.swift` | App lifecycle, grouped menu bar item and click routing |
+| `Sources/SettingsStore.swift` | Persisted menu placement and notification preferences |
+| `Sources/SettingsView.swift` | Native General, Menu Bar, Notifications and About controls |
+| `Sources/SettingsWindowController.swift` | Single settings window, activation and display fitting |
+| `Sources/LoginItemModel.swift` | System login registration status, changes and errors |
 | `Sources/WorkspaceData.swift` | Decoded workspace/window data and snapshot ordering |
 | `Sources/AeroSpace.swift` | AeroSpace commands, event subscription and workspace state |
 | `Sources/Notifications.swift` | Dock badge monitoring through Accessibility |

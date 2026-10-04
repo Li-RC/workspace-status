@@ -30,6 +30,7 @@ Built with **Swift, SwiftUI and AppKit**, it brings **Liquid Glass** controls to
 - **Native appearance.** Uses Liquid Glass on macOS 26 and later.
 - **Display-aware placement.** Keeps the saved position on notched displays. On displays without a notch, centers the strip when space allows, or places it immediately after the application menus.
 - **Unread indicators.** An orange bell highlights apps with Dock badges. View those apps and their badge values under **Notifications**.
+- **Native settings.** Configure login startup, menu bar placement and Dock badge monitoring in a dedicated settings window.
 - **Local operation.** Runs without network services or changes to your AeroSpace configuration.
 
 ## Requirements
@@ -47,7 +48,7 @@ Built with **Swift, SwiftUI and AppKit**, it brings **Liquid Glass** controls to
 2. For a DMG, drag **Workspace Status.app** into **Applications**. For a ZIP, extract it and move the app into **Applications**.
 3. Start AeroSpace, then open **Workspace Status**.
 
-The app runs in the menu bar without a Dock icon. To start it at login, add it in **System Settings → General → Login Items**.
+The app runs in the menu bar without a Dock icon. To start it at login, enable **Launch at login** in the app's Settings. If macOS requires approval, Settings provides a button to open Login Items.
 
 This README describes the current source on `main`. Check the release notes for features included in a downloaded version.
 
@@ -64,6 +65,8 @@ This README describes the current source on `main`. Check the release notes for 
 | Window in an expanded list | Focus that window |
 | App under Notifications | Focus one of its windows, or open the app |
 | Refresh | Reload workspace information |
+| Settings gear | Open the settings window |
+| Right-click the bell | Open a menu with Settings and Quit |
 | Quit | Exit Workspace Status |
 
 The whole inactive workspace group is clickable in the menu bar. Workspace numbers and app icons behave the same in the menu bar and dropdown. Window focus history is kept only while the app runs; if no history exists for an app, its first available window is focused. The current workspace keeps its menu bar indicator even when empty.
@@ -71,6 +74,21 @@ The whole inactive workspace group is clickable in the menu bar. Workspace numbe
 Click outside the dropdown or press **Escape** to close it. The dropdown fits your display and respects **Reduce Motion**.
 
 Menu bar single clicks respond immediately. Dropdown app icons wait for the system double-click interval before acting, so the dropdown stays open long enough to receive a second click. Keyboard activation responds immediately.
+
+### Settings
+
+Open the bell dropdown and click the gear beside Refresh, or right-click the bell and choose **Settings…**. Reopening the running app through Finder or Spotlight also opens Settings. **⌘,** opens Settings while Workspace Status has keyboard focus; it is not a global shortcut.
+
+| Section | Options |
+| --- | --- |
+| General | Launch at login and its macOS registration/approval status |
+| Menu Bar | Automatic display-aware placement or the normal system position |
+| Notifications | Show Dock badges, Accessibility status and access to permission settings |
+| About | App version/build, repository and MIT license |
+
+Preferences take effect immediately and persist across restarts. Automatic placement and Dock badge monitoring are enabled by default. Choose **System position** to let macOS or a menu bar manager handle placement. Disabling Dock badges stops badge monitoring without affecting workspace navigation or permission for automatic placement.
+
+Settings follows system appearance. Closing its window or pressing **⌘W** keeps the menu bar app running. Startup at login does not open Settings.
 
 ### Placement on multiple displays
 
