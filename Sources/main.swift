@@ -87,17 +87,16 @@ if args.contains("--self-test") {
                 try! bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[index + 1]))
             }
             let frame = delegate.workspaceFrames[fixture.current]!
-            let point = button.convert(NSPoint(x: frame.midX, y: frame.midY), to: nil)
-            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
-                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: button.window!.windowNumber,
-                    context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
-                application.postEvent(event, atStart: false)
+            let window = button.window!
+            let workspacePoint = window.convertPoint(toScreen: button.convert(NSPoint(x: frame.midX, y: frame.midY), to: nil))
+            for y in [window.frame.minY + 1, workspacePoint.y, window.frame.maxY - 1] {
+                delegate.clickMenuBar(at: NSPoint(x: workspacePoint.x, y: y))
+                precondition(!delegate.panel.isVisible, "A workspace click opened the dropdown")
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 precondition(!delegate.panel.isVisible, "A workspace click opened the dropdown")
                 precondition(delegate.workspaces.snapshot.current == fixture.current, "Current workspace click changed the workspace")
-                print("Native workspace click keeps dropdown closed: PASS")
+                print("Screen-coordinate workspace routing across the full menu bar height: PASS")
                 if !args.contains("--hold-menu-preview") { exit(0) }
             }
         }
@@ -172,21 +171,19 @@ if args.contains("--self-test") {
     application.delegate = delegate
     func clickBell(_ index: Int) {
         guard let button = delegate.item.button, let window = button.window else { exit(1) }
-        let point = button.convert(NSPoint(x: delegate.bellFrame.midX, y: delegate.bellFrame.midY), to: nil)
-        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-            let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
-                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                context: nil, eventNumber: index, clickCount: 1, pressure: 1)!
-            application.postEvent(event, atStart: false)
-        }
+        var point = window.convertPoint(toScreen: button.convert(NSPoint(x: delegate.bellFrame.midX, y: delegate.bellFrame.midY), to: nil))
+        point.y = index % 2 == 1 ? window.frame.minY + 1 : window.frame.maxY - 1
+        delegate.dismissIfOutside(at: point)
+        if index % 2 == 0 { precondition(delegate.panel.isVisible, "Bell press was dismissed before it could toggle closed") }
+        delegate.clickMenuBar(at: point)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             let expected = index % 2 == 1
             guard delegate.panel.isVisible == expected else {
-                print("FAIL: native bell click \(index), expected \(expected ? "open" : "closed")")
+                print("FAIL: bell screen-coordinate click \(index), expected \(expected ? "open" : "closed")")
                 delegate.panel.orderOut(nil)
                 exit(1)
             }
-            print("Native bell mouse click \(index): \(expected ? "OPEN" : "CLOSED")")
+            print("Bell screen-coordinate click \(index): \(expected ? "OPEN" : "CLOSED")")
             if index < 4 { clickBell(index + 1) }
             else { delegate.workspaces.stop(); delegate.notifications.stop(); exit(0) }
         }
