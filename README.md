@@ -15,7 +15,7 @@ Workspace Status is a native macOS menu bar app for [AeroSpace](https://nikitabo
 ## Features
 
 - **Workspace overview.** See occupied workspaces and their open apps, with your current workspace highlighted.
-- **Direct navigation.** Switch workspaces from the menu bar, or use the dropdown to select an app or a specific window.
+- **Direct navigation.** Click an inactive workspace or one of its apps to switch there. Click an app in the current workspace to focus it.
 - **Window browsing.** Expand a workspace in the dropdown to browse its open windows.
 - **Native appearance.** Uses Liquid Glass on macOS 26 and later.
 - **Unread indicators.** An orange bell highlights apps with Dock badges. View those apps and their badge values under **Notifications**.
@@ -42,17 +42,17 @@ The app runs in the menu bar without a Dock icon. To start it at login, add it i
 
 | Control | Action |
 | --- | --- |
-| Workspace number or app icons in the menu bar | Switch to that workspace |
+| Workspace number | Switch to that workspace; clicking the current number leaves focus unchanged |
+| App icon in an inactive workspace | Switch to that workspace, preserving its existing focus |
+| App icon in the current workspace | Focus that app's most recently used window in the current workspace |
 | Bell | Toggle the dropdown open or closed |
-| Workspace number in the dropdown | Switch to that workspace |
-| App icon in the dropdown | Focus a window of that app in that workspace |
 | Window count / chevron | Expand or collapse the workspace's window list |
 | Window in an expanded list | Focus that window |
 | App under Notifications | Focus one of its windows, or open the app |
 | Refresh | Reload workspace information |
 | Quit | Exit Workspace Status |
 
-Each menu bar app icon selects its workspace. Individual app selection is available inside the dropdown. The current workspace keeps its menu bar indicator even when empty.
+The whole inactive workspace group is clickable in the menu bar. Workspace numbers and app icons behave the same in the menu bar and dropdown. Window focus history is kept only while the app runs; if no history exists for an app, its first available window is focused. The current workspace keeps its menu bar indicator even when empty.
 
 Click outside the dropdown or press **Escape** to close it. The dropdown fits your display and respects **Reduce Motion**.
 

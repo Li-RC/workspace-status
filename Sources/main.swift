@@ -41,6 +41,25 @@ if args.contains("--self-test") {
     precondition(fixture.appBundles(in: "1").count == 8)
     precondition(fixture.appBundles(in: "1").first == "com.apple.finder")
     precondition(fixture.appBundles(in: "3").isEmpty)
+    let model = WorkspaceModel()
+    model.snapshot = Snapshot(spaces: fixture.spaces, current: "1", windows: fixture.windows)
+    precondition(model.navigationArguments(to: "2", appBundle: "com.apple.Preview") == ["workspace", "2"])
+    precondition(model.navigationArguments(to: "1") == nil)
+    precondition(model.navigationArguments(to: "1", appBundle: "com.apple.finder") == ["focus", "--window-id", "0"])
+    model.consumeEvents(Data(#"{"_event":"focus-changed","windowId":20}"#.utf8))
+    precondition(model.navigationArguments(to: "1", appBundle: "com.apple.finder") == ["focus", "--window-id", "0"],
+                 "A partial event changed focus history")
+    model.consumeEvents(Data("\n{\"_event\":\"mode-changed\",\"mode\":\"main\"}\n{\"_event\":\"focus-changed\",\"windowId\":21}\n".utf8))
+    precondition(model.navigationArguments(to: "1", appBundle: "com.apple.finder") == ["focus", "--window-id", "20"])
+    precondition(model.navigationArguments(to: "1", appBundle: "com.apple.Preview") == ["focus", "--window-id", "5"],
+                 "App focus crossed into another workspace")
+    model.consumeEvents(Data("invalid JSON\n{\"_event\":\"focus-changed\",\"windowId\":null}\n{\"_event\":\"focus-changed\",\"windowId\":0}\n".utf8))
+    precondition(model.navigationArguments(to: "1", appBundle: "com.apple.finder") == ["focus", "--window-id", "0"])
+    model.snapshot = Snapshot(spaces: fixture.spaces, current: "1", windows: fixture.windows.filter { $0.id != 0 })
+    precondition(model.navigationArguments(to: "1", appBundle: "com.apple.finder") == ["focus", "--window-id", "20"],
+                 "App focus selected a closed window")
+    precondition(model.navigationArguments(to: "1", appBundle: "missing.app") == nil)
+    print("PASS: inactive switching, current-app focus, streamed focus history and closed-window fallback.")
     print("PASS: JSON, screen sizing, workspace ordering/filtering and all-app deduplication.")
 } else if args.contains("--menu-test") {
     let application = NSApplication.shared
@@ -81,6 +100,33 @@ if args.contains("--self-test") {
             }
             print("Workspace insertion, removal and empty-current changes keep one persistent menu bar item: PASS")
             print("Ordered workspace regions, compact padding and all 8 application icons: PASS")
+            delegate.workspaces.snapshot = Snapshot(spaces: fixture.spaces, current: "1", windows: fixture.windows)
+            delegate.workspaces.consumeEvents(Data("{\"_event\":\"focus-changed\",\"windowId\":20}\n".utf8))
+            delegate.updateStatus()
+            for space in delegate.menuOrder where space != "1" {
+                let frame = delegate.workspaceFrames[space]!
+                for x in stride(from: frame.minX + 0.5, to: frame.maxX, by: 1) {
+                    precondition(delegate.navigationArguments(at: NSPoint(x: x, y: 11)) == ["workspace", space],
+                                 "Part of an inactive workspace group did not select its workspace")
+                }
+            }
+            let activeFrame = delegate.workspaceFrames["1"]!
+            precondition(delegate.navigationArguments(at: NSPoint(x: activeFrame.minX + 11, y: 11)) == nil,
+                         "The current workspace number changed focus")
+            for (index, bundle) in fixture.appBundles(in: "1").enumerated() {
+                let left = imageRect.minX + activeFrame.minX + workspaceBadge("1").size.width + 6 + CGFloat(index * 21)
+                let id = bundle == "com.apple.finder" ? 20 : fixture.windows(in: "1").first { $0.bundle == bundle }!.id
+                for x in [left + 0.5, left + 8, left + 15.5] {
+                    precondition(delegate.navigationArguments(at: NSPoint(x: x, y: 11)) == ["focus", "--window-id", String(id)],
+                                 "An app icon selected the wrong window")
+                }
+                precondition(delegate.navigationArguments(at: NSPoint(x: left - 0.5, y: 11)) == nil,
+                             "Space between app icons changed focus")
+            }
+            precondition(delegate.navigationArguments(at: NSPoint(x: delegate.bellFrame.midX, y: 11)) == nil)
+            delegate.workspaces.snapshot = fixture
+            delegate.updateStatus()
+            print("Whole inactive groups switch; all active app icons focus their own most recent window: PASS")
             if let index = args.firstIndex(of: "--render-menu-preview"), args.count > index + 1 {
                 let bitmap = button.bitmapImageRepForCachingDisplay(in: button.bounds)!
                 button.cacheDisplay(in: button.bounds, to: bitmap)

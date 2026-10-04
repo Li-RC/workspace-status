@@ -16,6 +16,10 @@ struct AppWindow: Decodable, Identifiable {
 }
 
 struct Space: Decodable { let workspace: String }
+struct FocusEvent: Decodable {
+    let _event: String
+    let windowId: Int?
+}
 struct Snapshot {
     let spaces: [String]
     let current: String
@@ -95,6 +99,30 @@ final class WorkspaceModel: ObservableObject {
     private var subscription: Process?
     private var subscriptionPipe: Pipe?
     private var timer: Timer?
+    private var eventBuffer = Data()
+    private var recentWindowIDs: [Int] = []
+
+    func consumeEvents(_ data: Data) {
+        eventBuffer.append(data)
+        while let newline = eventBuffer.firstIndex(of: 10) {
+            let line = eventBuffer.prefix(upTo: newline)
+            if let event = try? JSONDecoder().decode(FocusEvent.self, from: line),
+               event._event == "focus-changed", let id = event.windowId {
+                recentWindowIDs.removeAll { $0 == id }
+                recentWindowIDs.insert(id, at: 0)
+            }
+            eventBuffer.removeSubrange(...newline)
+        }
+    }
+
+    func navigationArguments(to space: String, appBundle: String? = nil) -> [String]? {
+        if space != snapshot.current { return ["workspace", space] }
+        guard let bundle = appBundle else { return nil }
+        let windows = snapshot.windows(in: space).filter { $0.bundle == bundle }
+        let window = recentWindowIDs.compactMap { id in windows.first { $0.id == id } }.first ?? windows.first
+        guard let window else { return nil }
+        return ["focus", "--window-id", String(window.id)]
+    }
 
     func start() {
         refresh()
@@ -115,7 +143,11 @@ final class WorkspaceModel: ObservableObject {
             DispatchQueue.main.async {
                 self.loading = false
                 switch result {
-                case .success(let snapshot): self.snapshot = snapshot; self.error = nil
+                case .success(let snapshot):
+                    self.snapshot = snapshot; self.error = nil
+                    if !self.pending {
+                        self.recentWindowIDs.removeAll { id in !snapshot.windows.contains { $0.id == id } }
+                    }
                 case .failure(let error): self.error = error.localizedDescription
                 }
                 self.changed?()
@@ -127,14 +159,16 @@ final class WorkspaceModel: ObservableObject {
     private func subscribe() {
         guard let path = AeroSpace.executable else { return }
         subscriptionPipe?.fileHandleForReading.readabilityHandler = nil
+        eventBuffer = Data()
         let process = Process(), pipe = Pipe()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = ["subscribe", "--all"]
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            guard !handle.availableData.isEmpty else { handle.readabilityHandler = nil; return }
-            DispatchQueue.main.async { self?.refresh() }
+            let data = handle.availableData
+            guard !data.isEmpty else { handle.readabilityHandler = nil; return }
+            DispatchQueue.main.async { self?.consumeEvents(data); self?.refresh() }
         }
         do { try process.run(); subscription = process; subscriptionPipe = pipe }
         catch { pipe.fileHandleForReading.readabilityHandler = nil }

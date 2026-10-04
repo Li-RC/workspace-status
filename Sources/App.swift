@@ -123,8 +123,14 @@ struct Overview: View {
         workspaces.perform(["focus", "--window-id", String(window.id)], completion: close)
     }
     func openApp(_ bundle: String, in space: String? = nil) {
+        if let space {
+            if let arguments = workspaces.navigationArguments(to: space, appBundle: bundle) {
+                workspaces.perform(arguments, completion: close)
+            } else { close() }
+            return
+        }
         if let window = workspaces.snapshot.windows.first(where: {
-            $0.bundle == bundle && (space == nil || $0.workspace == space)
+            $0.bundle == bundle
         }) {
             focus(window)
         } else if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) {
@@ -168,7 +174,7 @@ struct Overview: View {
                                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 22, maximum: 22))], alignment: .leading, spacing: 6) {
                                     ForEach(bundles, id: \.self) { bundle in
                                         Button { openApp(bundle, in: space) } label: { AppIcon(bundle: bundle) }
-                                            .buttonStyle(.plain).help("Open \(windows.first { $0.bundle == bundle }?.app ?? bundle)")
+                                            .buttonStyle(.plain).help(current ? "Focus \(windows.first { $0.bundle == bundle }?.app ?? bundle)" : "Switch to workspace \(space)")
                                     }
                                 }.frame(maxWidth: .infinity, alignment: .leading)
                                 Button {
@@ -309,6 +315,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var naturalHeight: CGFloat = 240
     var item: NSStatusItem!
     private(set) var workspaceFrames: [String: NSRect] = [:]
+    private(set) var appFrames: [String: [String: NSRect]] = [:]
     private(set) var bellFrame = NSRect.zero
     private var appearanceObservation: NSKeyValueObservation?
     private(set) var menuOrder: [String] = []
@@ -327,7 +334,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.imagePosition = .imageLeft
         item.button?.attributedTitle = NSAttributedString(string: "")
         item.button?.imageHugsTitle = true
-        item.button?.toolTip = "Workspace Status: click a workspace to switch, or the bell for overview."
+        item.button?.toolTip = "Workspace Status: click a workspace to switch, an app in the current workspace to focus, or the bell for overview."
         item.button?.setAccessibilityLabel("Workspace Status")
         appearanceObservation = item.button?.observe(\.effectiveAppearance, options: [.old, .new]) { [weak self] _, change in
             guard change.oldValue?.name != change.newValue?.name else { return }
@@ -379,12 +386,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let snapshot = workspaces.snapshot
         menuOrder = snapshot.menuSpaces
         workspaceFrames = [:]
+        appFrames = [:]
         var x: CGFloat = 0
         for space in menuOrder {
             let badge = workspaceBadge(space)
             let bundles = snapshot.appBundles(in: space)
             let width = badge.size.width + (bundles.isEmpty ? 0 : CGFloat(bundles.count * 21 + 4) + 2) + 4
             workspaceFrames[space] = NSRect(x: x, y: 0, width: width, height: 22)
+            appFrames[space] = Dictionary(uniqueKeysWithValues: bundles.enumerated().map { index, bundle in
+                (bundle, NSRect(x: x + badge.size.width + 6 + CGFloat(index * 21), y: 0, width: 16, height: 22))
+            })
             x += width
         }
         bellFrame = NSRect(x: x, y: 0, width: 24, height: 22)
@@ -425,6 +436,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func navigationArguments(at point: NSPoint) -> [String]? {
+        guard let button = item.button,
+              let space = menuOrder.first(where: { workspaceFrames[$0]!.contains(point) }) else { return nil }
+        // App frames share the image's coordinates; the native button adds image padding.
+        let imagePoint = NSPoint(x: point.x - button.cell!.imageRect(forBounds: button.bounds).minX, y: 11)
+        let bundle = appFrames[space]?.first(where: { $0.value.contains(imagePoint) })?.key
+        return workspaces.navigationArguments(to: space, appBundle: bundle)
+    }
+
     @objc func menuBarClicked(_ sender: NSStatusBarButton) {
         if NSApp.currentEvent?.type == .leftMouseDown {
             // macOS's menu bar host forwards mouse events at the item's center.
@@ -439,8 +459,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let location = button.convert(window.convertPoint(fromScreen: screenPoint), from: nil)
         // The menu bar host can be taller than the button's drawing bounds.
         let point = NSPoint(x: location.x, y: button.bounds.midY)
-        if let space = menuOrder.first(where: { workspaceFrames[$0]!.contains(point) }) {
-            selectWorkspace(space)
+        if menuOrder.contains(where: { workspaceFrames[$0]!.contains(point) }) {
+            panel.dismiss()
+            if let arguments = navigationArguments(at: point) {
+                workspaces.perform(arguments, completion: {})
+            }
             return
         }
         if bellFrame.contains(point) { toggle() }

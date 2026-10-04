@@ -21,10 +21,10 @@ app_binary="dist/Workspace Status.app/Contents/MacOS/WorkspaceStatus"
 
 | Check | Coverage |
 | --- | --- |
-| `--self-test` | JSON decoding, workspace ordering and filtering, app deduplication, and display size limits; also runs during the build |
+| `--self-test` | JSON decoding, workspace ordering and filtering, app deduplication, display size limits, streamed focus history, and workspace-specific app selection; also runs during the build |
 | `--diagnose` | Live workspace and application data plus Accessibility state, excluding window titles |
 | `--smoke-test` | Eight-second run checking live workspace loading and menu bar image creation; quit any existing instance first |
-| `--menu-test` | Native menu bar ordering, complete app icons, compact spacing, current-workspace clicks, and a persistent grouped item through workspace insertion and removal |
+| `--menu-test` | Native menu bar ordering, complete app icons, compact spacing, inactive group and active app click routing, and a persistent grouped item through workspace insertion and removal |
 | `--layout-test` | Expansion, added workspaces, collapse, a fixed top edge, and a tall list fitting without scrolling |
 | `--bell-click-test` | Four native bell clicks verifying open → closed → open → closed |
 | `--popover-test` | Popup containment, transparent background, completed fade, and dismissal behavior |
