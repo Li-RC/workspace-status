@@ -4,6 +4,8 @@ let args = CommandLine.arguments
 setbuf(stdout, nil)
 if args.contains("--self-test") {
     try runSelfTests()
+} else if args.contains("--settings-test") {
+    runSettingsTest(args: args)
 } else if args.contains("--app-click-test") {
     runAppClickTest()
 } else if args.contains("--placement-test") {

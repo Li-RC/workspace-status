@@ -4,6 +4,7 @@ final class MenuStripView: NSView {
     var image: NSImage?
     var contentWidth: CGFloat = 1
     var click: ((NSPoint, TimeInterval) -> Void)?
+    var contextClick: ((NSPoint) -> Void)?
     override var isFlipped: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     var scale: CGFloat { min(1, bounds.width / max(1, contentWidth)) }
@@ -19,6 +20,11 @@ final class MenuStripView: NSView {
     override func mouseDown(with event: NSEvent) {
         guard let window else { return }
         click?(window.convertPoint(toScreen: event.locationInWindow), event.timestamp)
+    }
+
+    override func rightMouseDown(with event: NSEvent) {
+        guard let window else { return }
+        contextClick?(window.convertPoint(toScreen: event.locationInWindow))
     }
 
     override func accessibilityPerformPress() -> Bool {

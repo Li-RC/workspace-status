@@ -14,6 +14,9 @@ func menuStripFrame(screen: NSRect, hasNotch: Bool, native: NSRect?, menuEnd: CG
 }
 
 final class MenuPlacement: ObservableObject {
+    var automatic = true {
+        didSet { if automatic != oldValue { refresh() } }
+    }
     @Published private(set) var notice: String?
     private(set) var usesOverlays = false
     private(set) var menuWidth: CGFloat = 0
@@ -22,14 +25,17 @@ final class MenuPlacement: ObservableObject {
     private weak var item: NSStatusItem?
     private var image: (() -> NSImage?)?
     private var click: ((NSPoint, TimeInterval) -> Void)?
+    private var contextClick: ((NSPoint) -> Void)?
     private var timer: Timer?
     private var observers: [NSObjectProtocol] = []
     private var loading = false
     private var started = false
     private var lastNativeFrame: NSRect?
 
-    func start(item: NSStatusItem, image: @escaping () -> NSImage?, click: @escaping (NSPoint, TimeInterval) -> Void) {
+    func start(item: NSStatusItem, image: @escaping () -> NSImage?, click: @escaping (NSPoint, TimeInterval) -> Void,
+               contextClick: ((NSPoint) -> Void)? = nil) {
         self.item = item; self.image = image; self.click = click
+        self.contextClick = contextClick
         started = true
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main) { [weak self] _ in self?.refresh() })
@@ -39,6 +45,11 @@ final class MenuPlacement: ObservableObject {
     }
 
     func refresh() {
+        guard automatic else {
+            timer?.invalidate(); timer = nil
+            restoreNative(); notice = nil
+            return
+        }
         guard started else { return }
         let screens = NSScreen.screens
         guard let item, screens.contains(where: { $0.auxiliaryTopLeftArea == nil }) else {
@@ -63,7 +74,7 @@ final class MenuPlacement: ObservableObject {
             let geometry = MenuGeometry.read(top: top)
             DispatchQueue.main.async {
                 self.loading = false
-                guard self.started, NSScreen.screens.contains(where: { $0.auxiliaryTopLeftArea == nil }) else { return }
+                guard self.started, self.automatic, NSScreen.screens.contains(where: { $0.auxiliaryTopLeftArea == nil }) else { return }
                 guard let geometry else {
                     self.restoreNative(); self.notice = "Application-menu positions are currently unavailable."
                     return
@@ -136,6 +147,7 @@ final class MenuPlacement: ObservableObject {
                 view.setAccessibilityLabel("Workspace Status")
                 view.setAccessibilityHelp("Click a workspace to switch, an app to focus, or the bell for overview. Double-click any app to focus it.")
                 view.click = click
+                view.contextClick = contextClick
                 overlay.contentView = view
                 overlays[id] = overlay
             }

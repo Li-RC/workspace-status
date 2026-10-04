@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    let settings: SettingsStore
+    lazy var settingsWindow = SettingsWindowController(settings: settings, notifications: notifications)
     let workspaces = WorkspaceModel()
     let notifications = NotificationModel()
     let overviewState = OverviewState()
@@ -22,12 +24,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hosting: NSHostingController<Overview>!
     private var lastAppClick: (space: String, bundle: String, point: NSPoint, timestamp: TimeInterval)?
 
+    init(settings: SettingsStore = SettingsStore()) {
+        self.settings = settings
+        super.init()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        installMainMenu()
+        placement.automatic = settings.menuBarPosition == .automatic
+        settings.changed = { [weak self] in self?.applySettings() }
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.target = self
         item.button?.action = #selector(menuBarClicked(_:))
-        item.button?.sendAction(on: [.leftMouseDown])
+        item.button?.sendAction(on: [.leftMouseDown, .rightMouseDown])
         item.button?.imagePosition = .imageLeft
         item.button?.attributedTitle = NSAttributedString(string: "")
         item.button?.imageHugsTitle = true
@@ -55,7 +65,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hosting = NSHostingController(rootView:
             Overview(workspaces: workspaces, notifications: notifications, placement: placement,
                      close: { [weak self] in self?.panel.dismiss() }, state: overviewState,
-                     resized: { [weak self] height in self?.resizeOverview(to: height) }))
+                     resized: { [weak self] height in self?.resizeOverview(to: height) },
+                     openSettings: { [weak self] in self?.showSettings(nil) }))
         hosting.sizingOptions = []
         let container = NSViewController()
         container.addChild(hosting)
@@ -73,17 +84,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         workspaces.changed = { [weak self] in self?.updateStatus() }
         notifications.changed = { [weak self] in self?.updateStatus() }
         updateStatus()
-        let fixture = ["--menu-test", "--layout-test", "--placement-test"].contains { CommandLine.arguments.contains($0) }
+        let fixture = ["--menu-test", "--layout-test", "--placement-test", "--settings-test"].contains { CommandLine.arguments.contains($0) }
         if !fixture {
             workspaces.start()
+            notifications.setMonitoring(settings.dockBadgesEnabled)
             notifications.start()
         }
-        let check = ["--menu-test", "--layout-test", "--placement-test", "--bell-click-test", "--popover-test"]
+        let check = ["--menu-test", "--layout-test", "--placement-test", "--bell-click-test", "--popover-test", "--settings-test"]
             .contains { CommandLine.arguments.contains($0) }
         if !check {
             placement.start(item: item, image: { [weak self] in self?.statusImage },
-                click: { [weak self] point, time in self?.clickMenuBar(at: point, timestamp: time) })
+                click: { [weak self] point, time in self?.clickMenuBar(at: point, timestamp: time) },
+                contextClick: { [weak self] point in self?.showBellContextMenu(at: point) })
         }
+    }
+
+    private func installMainMenu() {
+        let menu = NSMenu()
+        let appMenu = NSMenu(title: "Workspace Status")
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings(_:)), keyEquivalent: ",")
+        settingsItem.target = self
+        appMenu.addItem(settingsItem)
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Quit Workspace Status", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let appItem = NSMenuItem()
+        appItem.submenu = appMenu
+        menu.addItem(appItem)
+        let windowMenu = NSMenu(title: "Window")
+        windowMenu.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        let windowItem = NSMenuItem(title: "Window", action: nil, keyEquivalent: "")
+        windowItem.submenu = windowMenu
+        menu.addItem(windowItem)
+        NSApp.mainMenu = menu
+    }
+
+    private func applySettings() {
+        placement.automatic = settings.menuBarPosition == .automatic
+        notifications.setMonitoring(settings.dockBadgesEnabled)
+        updateStatus()
+    }
+
+    @objc func showSettings(_ sender: Any?) {
+        let point = ((sender as? NSMenuItem)?.representedObject as? NSValue)?.pointValue ?? NSEvent.mouseLocation
+        let screen = panel.isPresented ? popupAnchor()?.1 : NSScreen.screens.first { $0.frame.contains(point) }
+        panel.dismiss()
+        // Release the nonactivating panel's key window before requesting settings activation.
+        panel.orderOut(nil)
+        lastAppClick = nil
+        settingsWindow.show(on: screen)
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        showSettings(nil)
+        return false
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    func bellContextMenu(at point: NSPoint) -> NSMenu? {
+        guard let location = menuPoint(at: point), bellFrame.contains(location.point) else { return nil }
+        let menu = NSMenu()
+        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings(_:)), keyEquivalent: "")
+        settingsItem.target = self
+        settingsItem.representedObject = NSValue(point: point)
+        menu.addItem(settingsItem)
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        return menu
+    }
+
+    func showBellContextMenu(at point: NSPoint) {
+        guard let menu = bellContextMenu(at: point) else { return }
+        panel.dismiss()
+        lastAppClick = nil
+        menu.popUp(positioning: nil, at: point, in: nil)
     }
 
     func updateStatus() {
@@ -186,7 +260,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func menuBarClicked(_ sender: NSStatusBarButton) {
-        if let event = NSApp.currentEvent, event.type == .leftMouseDown {
+        if NSApp.currentEvent?.type == .rightMouseDown {
+            showBellContextMenu(at: NSEvent.mouseLocation)
+        } else if let event = NSApp.currentEvent, event.type == .leftMouseDown {
             // macOS's menu bar host forwards mouse events at the item's center.
             clickMenuBar(at: NSEvent.mouseLocation, timestamp: event.timestamp)
         } else {
@@ -232,7 +308,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let (anchor, screen) = popupAnchor() else { return }
         hosting.rootView.width = max(1, min(360, screen.visibleFrame.width - 28))
         fitOverview(visibleFrame: screen.visibleFrame, anchor: anchor)
-        if !["--layout-test", "--placement-test"].contains(where: { CommandLine.arguments.contains($0) }) { workspaces.refresh() }
+        if !["--layout-test", "--placement-test", "--settings-test"].contains(where: { CommandLine.arguments.contains($0) }) { workspaces.refresh() }
         panel.present()
     }
 

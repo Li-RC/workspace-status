@@ -31,6 +31,7 @@ struct Overview: View {
     let close: () -> Void
     @ObservedObject var state: OverviewState
     let resized: (CGFloat) -> Void
+    var openSettings: () -> Void = {}
     var width: CGFloat = 360
     var scale: CGFloat = 1
     var canvasHeight: CGFloat = 240
@@ -53,7 +54,7 @@ struct Overview: View {
             if space != spaces.last { workspaceElements.append(1) }
         }
         let workspaceHeight = workspaceElements.reduce(0, +) + CGFloat(workspaceElements.count - 1) * 8 + 24
-        let noticesHeight: CGFloat = notifications.authorized
+        let noticesHeight: CGFloat = !notifications.monitoringEnabled ? 60 : notifications.authorized
             ? (notifications.badges.isEmpty ? 60 : 38 + CGFloat(notifications.badges.count * 32)) : 104
         return workspaceHeight + noticesHeight + 66
     }
@@ -92,6 +93,9 @@ struct Overview: View {
                             Text("Workspace \(workspaces.snapshot.current)").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
+                        Button(action: openSettings) { Image(systemName: "gearshape") }
+                            .buttonStyle(.borderless).focusEffectDisabled().help("Settings…")
+                            .accessibilityLabel("Settings").accessibilityIdentifier("openSettings")
                         Button { workspaces.refresh() } label: { Image(systemName: "arrow.clockwise") }
                             .buttonStyle(.borderless).focusEffectDisabled().help("Refresh workspaces")
                     }.frame(height: 34)
@@ -160,7 +164,9 @@ struct Overview: View {
                     .modifier(WorkspaceSurface())
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Notifications").font(.caption.weight(.semibold)).foregroundStyle(.secondary).frame(height: 14)
-                    if !notifications.authorized {
+                    if !notifications.monitoringEnabled {
+                        Text("Dock badge monitoring is off.").font(.caption).foregroundStyle(.secondary).frame(height: 14)
+                    } else if !notifications.authorized {
                         Text("Allow Accessibility to read app badges in the Dock.").font(.caption).foregroundStyle(.secondary).lineLimit(2).frame(height: 28)
                         Button("Enable Accessibility…") { notifications.enable() }.modifier(GlassControl()).controlSize(.small).frame(height: 22)
                     } else if notifications.badges.isEmpty {

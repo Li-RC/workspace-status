@@ -10,17 +10,32 @@ struct DockBadge: Identifiable {
 
 final class NotificationModel: ObservableObject {
     @Published var authorized = false
+    @Published private(set) var monitoringEnabled = true
     @Published var badges: [DockBadge] = []
     @Published var monitorStatus = "Enable Accessibility to read Dock badges."
     var changed: (() -> Void)?
     private var timer: Timer?
     private let queue = DispatchQueue(label: "WorkspaceStatus.accessibility", qos: .utility)
     private var scanning = false
+    private var generation = 0
 
     func start() {
-        checkPermission()
+        guard monitoringEnabled, timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             self?.checkPermission()
+        }
+        checkPermission()
+    }
+
+    func setMonitoring(_ enabled: Bool) {
+        guard monitoringEnabled != enabled else { return }
+        monitoringEnabled = enabled
+        if enabled { start() }
+        else {
+            stop()
+            badges = []
+            monitorStatus = "Dock badge monitoring is off."
+            changed?()
         }
     }
 
@@ -30,8 +45,9 @@ final class NotificationModel: ObservableObject {
         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
     }
 
-    private func checkPermission() {
+    func checkPermission() {
         authorized = AXIsProcessTrusted()
+        guard monitoringEnabled else { return }
         guard authorized else {
             monitorStatus = "Enable Accessibility to read Dock badges."
             badges = []
@@ -43,8 +59,9 @@ final class NotificationModel: ObservableObject {
     }
 
     private func scan() {
-        guard authorized, !scanning else { return }
+        guard monitoringEnabled, timer != nil, authorized, !scanning else { return }
         scanning = true
+        let requestGeneration = generation
         let applications = NSWorkspace.shared.runningApplications
         var names: [String: String] = [:]
         for app in applications {
@@ -69,7 +86,8 @@ final class NotificationModel: ObservableObject {
             }
             DispatchQueue.main.async {
                 self.scanning = false
-                guard self.authorized else { return }
+                guard self.monitoringEnabled, self.timer != nil, self.authorized else { return }
+                guard requestGeneration == self.generation else { self.scan(); return }
                 self.badges = badges.sorted { $0.name < $1.name }
                 self.changed?()
             }
@@ -83,5 +101,8 @@ final class NotificationModel: ObservableObject {
         for child in axChildren(element) { walk(child, depth: depth + 1, visited: &visited, body: body) }
     }
 
-    func stop() { timer?.invalidate() }
+    func stop() {
+        timer?.invalidate(); timer = nil
+        generation += 1
+    }
 }

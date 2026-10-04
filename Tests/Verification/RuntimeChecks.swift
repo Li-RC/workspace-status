@@ -72,6 +72,8 @@ func scheduleLivePlacementTest(delegate: AppDelegate, args: [String]) {
 
 func scheduleSmokeTest(delegate: AppDelegate) {
     DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+        precondition(!NSApp.windows.contains { $0.title == "Workspace Status Settings" && $0.isVisible },
+                     "Normal startup unexpectedly opened Settings")
         let healthy = !delegate.workspaces.snapshot.spaces.isEmpty && delegate.workspaces.error == nil
             && delegate.item.button?.image != nil
         print("Menu bar runtime: \(healthy ? "PASS" : "FAIL")")
