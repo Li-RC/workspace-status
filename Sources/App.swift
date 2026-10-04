@@ -291,7 +291,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.dismissIfOutside(at: NSEvent.mouseLocation)
         }
         localClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            let point = event.window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation
+            let point = event.window === self?.item.button?.window ? NSEvent.mouseLocation :
+                (event.window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation)
             self?.dismissIfOutside(at: point)
             return event
         }
@@ -373,14 +374,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func menuBarClicked(_ sender: NSStatusBarButton) {
-        if let event = NSApp.currentEvent, event.type == .leftMouseDown {
-            let point = sender.convert(event.locationInWindow, from: nil)
-            if let space = menuOrder.first(where: { workspaceFrames[$0]!.contains(point) }) {
-                selectWorkspace(space)
-                return
-            }
+        if NSApp.currentEvent?.type == .leftMouseDown {
+            // macOS's menu bar host forwards mouse events at the item's center.
+            clickMenuBar(at: NSEvent.mouseLocation)
+        } else {
+            toggle()
         }
-        toggle()
+    }
+
+    func clickMenuBar(at screenPoint: NSPoint) {
+        guard let button = item.button, let window = button.window else { return }
+        let location = button.convert(window.convertPoint(fromScreen: screenPoint), from: nil)
+        // The menu bar host can be taller than the button's drawing bounds.
+        let point = NSPoint(x: location.x, y: button.bounds.midY)
+        if let space = menuOrder.first(where: { workspaceFrames[$0]!.contains(point) }) {
+            selectWorkspace(space)
+            return
+        }
+        if bellFrame.contains(point) { toggle() }
     }
 
     @objc func toggle() {
@@ -389,8 +400,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func dismissIfOutside(at point: NSPoint) {
         guard panel.isVisible, !panel.frame.contains(point) else { return }
-        if let button = item.button, let window = button.window,
-           window.convertToScreen(button.convert(bellFrame, to: nil)).contains(point) { return }
+        if let button = item.button, let window = button.window {
+            let bell = window.convertToScreen(button.convert(bellFrame, to: nil))
+            if point.y >= window.frame.minY, point.y <= window.frame.maxY,
+               point.x >= bell.minX, point.x <= bell.maxX { return }
+        }
         panel.orderOut(nil)
     }
 
