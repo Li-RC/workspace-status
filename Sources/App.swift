@@ -75,7 +75,7 @@ struct WorkspaceSurface: ViewModifier {
     @ViewBuilder func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content.glassEffect(.regular.interactive(),
-                                in: RoundedRectangle(cornerRadius: 12))
+                                in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         } else {
             content.background(Color.secondary.opacity(0.05),
                                in: RoundedRectangle(cornerRadius: 10))
@@ -245,8 +245,61 @@ struct Overview: View {
 }
 
 final class OverviewPanel: NSPanel {
+    private(set) var isPresented = false
+    private var transitionID = 0
+
     override var canBecomeKey: Bool { true }
-    override func cancelOperation(_ sender: Any?) { orderOut(sender) }
+    override func cancelOperation(_ sender: Any?) { dismiss() }
+
+    func present() { transition(showing: true) }
+
+    func dismiss() {
+        guard isPresented else { return }
+        transition(showing: false)
+    }
+
+    private func transition(showing: Bool) {
+        let wasVisible = isVisible
+        isPresented = showing
+        transitionID += 1
+        let id = transitionID
+        let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : (showing ? 0.12 : 0.09)
+        ignoresMouseEvents = !showing
+        if showing {
+            if !wasVisible { alphaValue = 0 }
+            makeKeyAndOrderFront(nil)
+            contentView?.layoutSubtreeIfNeeded()
+        }
+        if let view = contentView {
+            view.wantsLayer = true
+            if let layer = view.layer {
+                let start = showing && !wasVisible ? 4 : (layer.presentation()?.transform.m42 ?? layer.transform.m42)
+                let end: CGFloat = showing ? 0 : 4
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                layer.transform = CATransform3DMakeTranslation(0, end, 0)
+                CATransaction.commit()
+                if duration > 0 {
+                    let movement = CABasicAnimation(keyPath: "transform.translation.y")
+                    movement.fromValue = start
+                    movement.toValue = end
+                    movement.duration = duration
+                    movement.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    layer.add(movement, forKey: "dropdownMovement")
+                } else {
+                    layer.removeAnimation(forKey: "dropdownMovement")
+                }
+            }
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            animator().alphaValue = showing ? 1 : 0
+        } completionHandler: { [weak self] in
+            guard let self, self.transitionID == id, !self.isPresented else { return }
+            self.orderOut(nil)
+        }
+    }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -297,7 +350,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         hosting = NSHostingController(rootView:
             Overview(workspaces: workspaces, notifications: notifications,
-                     close: { [weak self] in self?.panel.orderOut(nil) }, state: overviewState,
+                     close: { [weak self] in self?.panel.dismiss() }, state: overviewState,
                      resized: { [weak self] height in self?.resizeOverview(to: height) }))
         hosting.sizingOptions = []
         let container = NSViewController()
@@ -366,7 +419,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func selectWorkspace(_ space: String) {
-        panel.orderOut(nil)
+        panel.dismiss()
         if space != workspaces.snapshot.current {
             workspaces.perform(["workspace", space], completion: {})
         }
@@ -398,36 +451,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func dismissIfOutside(at point: NSPoint) {
-        guard panel.isVisible, !panel.frame.contains(point) else { return }
+        guard panel.isPresented, !panel.frame.contains(point) else { return }
         if let button = item.button, let window = button.window {
             let bell = window.convertToScreen(button.convert(bellFrame, to: nil))
             if point.y >= window.frame.minY, point.y <= window.frame.maxY,
                point.x >= bell.minX, point.x <= bell.maxX { return }
         }
-        panel.orderOut(nil)
+        panel.dismiss()
     }
 
     private func showOverview() {
-        if panel.isVisible { panel.orderOut(nil); return }
+        if panel.isPresented { panel.dismiss(); return }
         guard let button = item.button, let window = button.window, let screen = window.screen else { return }
         let anchor = window.convertToScreen(button.convert(bellFrame, to: nil))
         hosting.rootView.width = max(1, min(360, screen.visibleFrame.width - 28))
         fitOverview(visibleFrame: screen.visibleFrame, anchor: anchor)
         if !CommandLine.arguments.contains("--layout-test") { workspaces.refresh() }
-        panel.alphaValue = 0
-        panel.makeKeyAndOrderFront(nil)
-        panel.contentView?.layoutSubtreeIfNeeded()
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.10
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().alphaValue = 1
-        }
+        panel.present()
     }
 
     private func resizeOverview(to height: CGFloat) {
         guard height > 0, abs(naturalHeight - height) > 0.5 else { return }
         naturalHeight = height
-        guard panel.isVisible, let button = item.button, let window = button.window,
+        guard panel.isPresented, let button = item.button, let window = button.window,
               let screen = window.screen else { return }
         let anchor = window.convertToScreen(button.convert(bellFrame, to: nil))
         fitOverview(visibleFrame: screen.visibleFrame, anchor: anchor)

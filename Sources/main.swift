@@ -258,17 +258,41 @@ if args.contains("--self-test") {
             delegate.dismissIfOutside(at: NSPoint(x: bellFrame.midX, y: bellFrame.midY))
             precondition(delegate.panel.isVisible, "Bell mouse-down dismissed the popup before its toggle action")
             delegate.toggle()
-            precondition(!delegate.panel.isVisible, "Second bell click did not close the popup")
-            delegate.toggle()
-            precondition(delegate.panel.isVisible, "Bell could not reopen the popup")
-            delegate.panel.cancelOperation(nil)
-            precondition(!delegate.panel.isVisible, "Escape did not dismiss the popup")
-            delegate.toggle()
-            delegate.dismissIfOutside(at: NSPoint(x: delegate.panel.frame.minX - 10, y: delegate.panel.frame.minY - 10))
-            precondition(!delegate.panel.isVisible, "Outside click did not dismiss the popup")
-            print("Bell mouse-down exclusion, toggle, outside click and Escape dismissal: PASS")
-            delegate.workspaces.stop(); delegate.notifications.stop()
-            exit(fits ? 0 : 1)
+            precondition(!delegate.panel.isPresented, "Second bell click did not start dismissal")
+            func checkTransition(_ step: Int) {
+                switch step {
+                case 0:
+                    precondition(!delegate.panel.isVisible, "Close animation did not finish")
+                    delegate.toggle()
+                case 1:
+                    precondition(delegate.panel.isVisible && delegate.panel.alphaValue > 0.99, "Open animation did not finish")
+                    precondition(delegate.panel.contentView?.layer?.transform.m42 == 0, "Open animation left content displaced")
+                    delegate.panel.cancelOperation(nil)
+                case 2:
+                    precondition(!delegate.panel.isVisible, "Escape did not finish dismissal")
+                    delegate.toggle()
+                case 3:
+                    delegate.dismissIfOutside(at: NSPoint(x: delegate.panel.frame.minX - 10, y: delegate.panel.frame.minY - 10))
+                    precondition(!delegate.panel.isPresented, "Outside click did not start dismissal")
+                case 4:
+                    precondition(!delegate.panel.isVisible, "Outside click did not finish dismissal")
+                    delegate.toggle()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+                        delegate.toggle()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { delegate.toggle() }
+                    }
+                default:
+                    precondition(delegate.panel.isPresented && delegate.panel.isVisible && delegate.panel.alphaValue > 0.99,
+                                 "Interrupted close animation hid the reopened popup")
+                    precondition(delegate.panel.contentView?.layer?.transform.m42 == 0, "Rapid toggles left content displaced")
+                    print("Bell mouse-down exclusion, animated toggle, outside click and Escape dismissal: PASS")
+                    print("Rapid close/reopen keeps the dropdown visible and fully opaque: PASS")
+                    delegate.workspaces.stop(); delegate.notifications.stop()
+                    exit(fits ? 0 : 1)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { checkTransition(step + 1) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { checkTransition(0) }
         }
     }
     application.run()
