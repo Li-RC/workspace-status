@@ -67,12 +67,23 @@ This requires screen capture access and exports both the window image and a `-co
 
 | Path | Purpose |
 | --- | --- |
-| `Sources/AeroSpace.swift` | AeroSpace integration and workspace state |
+| `Sources/main.swift` | Command dispatch, duplicate-instance guard and app startup |
+| `Sources/App.swift` | App lifecycle, grouped menu bar item and click routing |
+| `Sources/WorkspaceData.swift` | Decoded workspace/window data and snapshot ordering |
+| `Sources/AeroSpace.swift` | AeroSpace commands, event subscription and workspace state |
 | `Sources/Notifications.swift` | Dock badge monitoring through Accessibility |
-| `Sources/App.swift` | Menu bar controls and the SwiftUI dropdown |
-| `Sources/MenuPlacement.swift` | Display-aware strip placement, menu geometry and transparent positioned panels |
-| `Sources/main.swift` | App entry point and verification commands |
+| `Sources/Accessibility.swift` | Shared Accessibility attribute and child lookup helpers |
+| `Sources/AppIcons.swift` | Application icons, workspace badges and icon strips |
+| `Sources/WorkspaceAppButton.swift` | Dropdown app buttons and single/double click handling |
+| `Sources/Overview.swift` | SwiftUI dropdown, expansion state and native glass styling |
+| `Sources/OverviewPanel.swift` | Dropdown panel sizing and appearance/dismissal animation |
+| `Sources/MenuPlacement.swift` | Display-aware placement and positioned panel lifecycle |
+| `Sources/MenuGeometry.swift` | System menu bar and status item geometry |
+| `Sources/MenuStripView.swift` | Positioned strip drawing and input coordinates |
+| `Tests/Verification/` | In-app checks, diagnostics, previews and shared fixtures |
 | `Tests/MenuFixture.swift` | Native menu host for hardware placement checks |
 | `Tests/check-placement-live.py` | Live check runner, log capture and restoration of installed apps |
 | `build.sh` | Local compilation and signing |
 | [`Design/AppIcon/`](Design/AppIcon/) | Editable Icon Composer project, SVG layers, and appearance previews |
+
+`build.sh` compiles `Sources/*.swift` and `Tests/Verification/*.swift` into the app so the verification flags above remain available. `Tests/MenuFixture.swift` is a separate executable compiled by the live placement runner.
