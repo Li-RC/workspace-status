@@ -19,6 +19,66 @@ struct AppIcon: View {
     var body: some View { Image(nsImage: appIcon(bundle)).resizable().frame(width: 20, height: 20) }
 }
 
+final class AppClickButton: NSButton {
+    var singleClick: (() -> Void)?
+    var doubleClick: (() -> Void)?
+    private var pendingClick: DispatchWorkItem?
+
+    func handleMouseClick(count: Int) {
+        pendingClick?.cancel()
+        if count >= 2 { doubleClick?() }
+        else {
+            let click = DispatchWorkItem { [weak self] in self?.singleClick?() }
+            pendingClick = click
+            DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: click)
+        }
+    }
+
+    @objc func activate() {
+        if let event = NSApp.currentEvent, event.type == .leftMouseUp || event.type == .leftMouseDown {
+            handleMouseClick(count: event.clickCount)
+            return
+        }
+        pendingClick?.cancel()
+        singleClick?()
+    }
+
+    deinit { pendingClick?.cancel() }
+}
+
+struct WorkspaceAppButton: NSViewRepresentable {
+    let bundle: String
+    let name: String
+    let current: Bool
+    let space: String
+    let singleClick: () -> Void
+    let doubleClick: () -> Void
+
+    func makeNSView(context: Context) -> AppClickButton {
+        let button = AppClickButton()
+        button.bezelStyle = .regularSquare
+        button.isBordered = false
+        button.focusRingType = .none
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleProportionallyDown
+        button.target = button
+        button.action = #selector(AppClickButton.activate)
+        return button
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: AppClickButton, context: Context) -> CGSize? {
+        CGSize(width: 20, height: 20)
+    }
+
+    func updateNSView(_ button: AppClickButton, context: Context) {
+        button.image = appIcon(bundle)
+        button.setAccessibilityLabel(name)
+        button.toolTip = (current ? "Focus \(name)" : "Switch to workspace \(space)") + "; double-click to focus \(name)"
+        button.singleClick = singleClick
+        button.doubleClick = doubleClick
+    }
+}
+
 func workspaceBadge(_ label: String, selected: Bool = true) -> NSImage {
     let font = NSFont.systemFont(ofSize: 12, weight: .bold)
     let line = CTLineCreateWithAttributedString(NSAttributedString(string: label,
@@ -122,9 +182,9 @@ struct Overview: View {
     func focus(_ window: AppWindow) {
         workspaces.perform(["focus", "--window-id", String(window.id)], completion: close)
     }
-    func openApp(_ bundle: String, in space: String? = nil) {
+    func openApp(_ bundle: String, in space: String? = nil, focusApp: Bool = false) {
         if let space {
-            if let arguments = workspaces.navigationArguments(to: space, appBundle: bundle) {
+            if let arguments = workspaces.navigationArguments(to: space, appBundle: bundle, focusApp: focusApp) {
                 workspaces.perform(arguments, completion: close)
             } else { close() }
             return
@@ -173,8 +233,11 @@ struct Overview: View {
                                 }.buttonStyle(.plain).help("Switch to workspace \(space)")
                                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 22, maximum: 22))], alignment: .leading, spacing: 6) {
                                     ForEach(bundles, id: \.self) { bundle in
-                                        Button { openApp(bundle, in: space) } label: { AppIcon(bundle: bundle) }
-                                            .buttonStyle(.plain).help(current ? "Focus \(windows.first { $0.bundle == bundle }?.app ?? bundle)" : "Switch to workspace \(space)")
+                                        WorkspaceAppButton(bundle: bundle, name: windows.first { $0.bundle == bundle }?.app ?? bundle,
+                                            current: current, space: space,
+                                            singleClick: { openApp(bundle, in: space) },
+                                            doubleClick: { openApp(bundle, in: space, focusApp: true) })
+                                            .frame(width: 20, height: 20)
                                     }
                                 }.frame(maxWidth: .infinity, alignment: .leading)
                                 Button {
@@ -272,7 +335,7 @@ final class OverviewPanel: NSPanel {
         let duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : (showing ? 0.12 : 0.09)
         ignoresMouseEvents = !showing
         if showing {
-            if !wasVisible { alphaValue = 0 }
+            alphaValue = 1
             makeKeyAndOrderFront(nil)
             contentView?.layoutSubtreeIfNeeded()
         }
@@ -281,9 +344,12 @@ final class OverviewPanel: NSPanel {
             if let layer = view.layer {
                 let start = showing && !wasVisible ? 4 : (layer.presentation()?.transform.m42 ?? layer.transform.m42)
                 let end: CGFloat = showing ? 0 : 4
+                let startOpacity: Float = showing && !wasVisible ? 0 : (layer.presentation()?.opacity ?? layer.opacity)
+                let endOpacity: Float = showing ? 1 : 0
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
                 layer.transform = CATransform3DMakeTranslation(0, end, 0)
+                layer.opacity = endOpacity
                 CATransaction.commit()
                 if duration > 0 {
                     let movement = CABasicAnimation(keyPath: "transform.translation.y")
@@ -292,18 +358,23 @@ final class OverviewPanel: NSPanel {
                     movement.duration = duration
                     movement.timingFunction = CAMediaTimingFunction(name: .easeOut)
                     layer.add(movement, forKey: "dropdownMovement")
+                    let fade = CABasicAnimation(keyPath: "opacity")
+                    fade.fromValue = startOpacity
+                    fade.toValue = endOpacity
+                    fade.duration = duration
+                    fade.timingFunction = movement.timingFunction
+                    layer.add(fade, forKey: "dropdownFade")
                 } else {
                     layer.removeAnimation(forKey: "dropdownMovement")
+                    layer.removeAnimation(forKey: "dropdownFade")
                 }
             }
         }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = duration
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            animator().alphaValue = showing ? 1 : 0
-        } completionHandler: { [weak self] in
-            guard let self, self.transitionID == id, !self.isPresented else { return }
-            self.orderOut(nil)
+        if !showing {
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+                guard let self, self.transitionID == id, !self.isPresented else { return }
+                self.orderOut(nil)
+            }
         }
     }
 }
@@ -324,6 +395,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var outsideClickMonitor: Any?
     private var localClickMonitor: Any?
     private var hosting: NSHostingController<Overview>!
+    private var lastAppClick: (space: String, bundle: String, point: NSPoint, timestamp: TimeInterval)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -334,7 +406,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.imagePosition = .imageLeft
         item.button?.attributedTitle = NSAttributedString(string: "")
         item.button?.imageHugsTitle = true
-        item.button?.toolTip = "Workspace Status: click a workspace to switch, an app in the current workspace to focus, or the bell for overview."
+        item.button?.toolTip = "Workspace Status: click a workspace to switch, an app in the current workspace to focus, or the bell for overview. Double-click any app to focus it."
         item.button?.setAccessibilityLabel("Workspace Status")
         appearanceObservation = item.button?.observe(\.effectiveAppearance, options: [.old, .new]) { [weak self] _, change in
             guard change.oldValue?.name != change.newValue?.name else { return }
@@ -436,40 +508,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func navigationArguments(at point: NSPoint) -> [String]? {
+    private func workspaceTarget(at point: NSPoint) -> (space: String, bundle: String?)? {
         guard let button = item.button,
               let space = menuOrder.first(where: { workspaceFrames[$0]!.contains(point) }) else { return nil }
         // App frames share the image's coordinates; the native button adds image padding.
         let imagePoint = NSPoint(x: point.x - button.cell!.imageRect(forBounds: button.bounds).minX, y: 11)
         let bundle = appFrames[space]?.first(where: { $0.value.contains(imagePoint) })?.key
-        return workspaces.navigationArguments(to: space, appBundle: bundle)
+        return (space, bundle)
+    }
+
+    func navigationArguments(at point: NSPoint) -> [String]? {
+        guard let target = workspaceTarget(at: point) else { return nil }
+        return workspaces.navigationArguments(to: target.space, appBundle: target.bundle)
+    }
+
+    func menuNavigation(at screenPoint: NSPoint, timestamp: TimeInterval) -> (workspaceClick: Bool, arguments: [String]?) {
+        let previous = lastAppClick
+        lastAppClick = nil
+        if let previous, timestamp > previous.timestamp,
+           timestamp - previous.timestamp <= NSEvent.doubleClickInterval,
+           abs(screenPoint.x - previous.point.x) <= 4, abs(screenPoint.y - previous.point.y) <= 4 {
+            // Keep the first app target even if switching rearranges the menu bar.
+            return (true, workspaces.navigationArguments(to: previous.space, appBundle: previous.bundle, focusApp: true))
+        }
+        guard let button = item.button, let window = button.window else { return (false, nil) }
+        let location = button.convert(window.convertPoint(fromScreen: screenPoint), from: nil)
+        let point = NSPoint(x: location.x, y: button.bounds.midY)
+        guard let target = workspaceTarget(at: point) else { return (false, nil) }
+        if let bundle = target.bundle { lastAppClick = (target.space, bundle, screenPoint, timestamp) }
+        return (true, workspaces.navigationArguments(to: target.space, appBundle: target.bundle))
     }
 
     @objc func menuBarClicked(_ sender: NSStatusBarButton) {
-        if NSApp.currentEvent?.type == .leftMouseDown {
+        if let event = NSApp.currentEvent, event.type == .leftMouseDown {
             // macOS's menu bar host forwards mouse events at the item's center.
-            clickMenuBar(at: NSEvent.mouseLocation)
+            clickMenuBar(at: NSEvent.mouseLocation, timestamp: event.timestamp)
         } else {
             toggle()
         }
     }
 
-    func clickMenuBar(at screenPoint: NSPoint) {
+    func clickMenuBar(at screenPoint: NSPoint, timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) {
         guard let button = item.button, let window = button.window else { return }
+        let navigation = menuNavigation(at: screenPoint, timestamp: timestamp)
+        if navigation.workspaceClick {
+            panel.dismiss()
+            if let arguments = navigation.arguments { workspaces.perform(arguments, completion: {}) }
+            return
+        }
         let location = button.convert(window.convertPoint(fromScreen: screenPoint), from: nil)
         // The menu bar host can be taller than the button's drawing bounds.
         let point = NSPoint(x: location.x, y: button.bounds.midY)
-        if menuOrder.contains(where: { workspaceFrames[$0]!.contains(point) }) {
-            panel.dismiss()
-            if let arguments = navigationArguments(at: point) {
-                workspaces.perform(arguments, completion: {})
-            }
-            return
-        }
         if bellFrame.contains(point) { toggle() }
     }
 
     @objc func toggle() {
+        lastAppClick = nil
         showOverview()
     }
 

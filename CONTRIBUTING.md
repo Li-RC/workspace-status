@@ -14,6 +14,7 @@ Run checks from the repository root. Quit any running Workspace Status instance 
 app_binary="dist/Workspace Status.app/Contents/MacOS/WorkspaceStatus"
 "$app_binary" --diagnose
 "$app_binary" --menu-test
+"$app_binary" --app-click-test
 "$app_binary" --layout-test
 "$app_binary" --bell-click-test
 "$app_binary" --popover-test
@@ -24,7 +25,8 @@ app_binary="dist/Workspace Status.app/Contents/MacOS/WorkspaceStatus"
 | `--self-test` | JSON decoding, workspace ordering and filtering, app deduplication, display size limits, streamed focus history, and workspace-specific app selection; also runs during the build |
 | `--diagnose` | Live workspace and application data plus Accessibility state, excluding window titles |
 | `--smoke-test` | Eight-second run checking live workspace loading and menu bar image creation; quit any existing instance first |
-| `--menu-test` | Native menu bar ordering, complete app icons, compact spacing, inactive group and active app click routing, and a persistent grouped item through workspace insertion and removal |
+| `--menu-test` | Native menu bar ordering, complete app icons, compact spacing, single/double click routing, preserved app targets after rearrangement, and a persistent grouped item through workspace insertion and removal |
+| `--app-click-test` | Dropdown app single/double clicks, cancellation of pending single clicks, and immediate keyboard activation |
 | `--layout-test` | Expansion, added workspaces, collapse, a fixed top edge, and a tall list fitting without scrolling |
 | `--bell-click-test` | Four native bell clicks verifying open → closed → open → closed |
 | `--popover-test` | Popup containment, transparent background, completed fade, and dismissal behavior |

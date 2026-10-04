@@ -115,8 +115,8 @@ final class WorkspaceModel: ObservableObject {
         }
     }
 
-    func navigationArguments(to space: String, appBundle: String? = nil) -> [String]? {
-        if space != snapshot.current { return ["workspace", space] }
+    func navigationArguments(to space: String, appBundle: String? = nil, focusApp: Bool = false) -> [String]? {
+        if space != snapshot.current && !focusApp { return ["workspace", space] }
         guard let bundle = appBundle else { return nil }
         let windows = snapshot.windows(in: space).filter { $0.bundle == bundle }
         let window = recentWindowIDs.compactMap { id in windows.first { $0.id == id } }.first ?? windows.first

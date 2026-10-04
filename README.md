@@ -45,6 +45,7 @@ The app runs in the menu bar without a Dock icon. To start it at login, add it i
 | Workspace number | Switch to that workspace; clicking the current number leaves focus unchanged |
 | App icon in an inactive workspace | Switch to that workspace, preserving its existing focus |
 | App icon in the current workspace | Focus that app's most recently used window in the current workspace |
+| Double-click any workspace app icon | Switch to its workspace and focus that app's most recently used window there |
 | Bell | Toggle the dropdown open or closed |
 | Window count / chevron | Expand or collapse the workspace's window list |
 | Window in an expanded list | Focus that window |
@@ -55,6 +56,8 @@ The app runs in the menu bar without a Dock icon. To start it at login, add it i
 The whole inactive workspace group is clickable in the menu bar. Workspace numbers and app icons behave the same in the menu bar and dropdown. Window focus history is kept only while the app runs; if no history exists for an app, its first available window is focused. The current workspace keeps its menu bar indicator even when empty.
 
 Click outside the dropdown or press **Escape** to close it. The dropdown fits your display and respects **Reduce Motion**.
+
+Menu bar single clicks respond immediately. Dropdown app icons wait for the system double-click interval before acting, so the dropdown stays open long enough to receive a second click. Keyboard activation responds immediately.
 
 ## Notifications and privacy
 
