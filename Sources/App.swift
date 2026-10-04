@@ -144,7 +144,7 @@ struct Overview: View {
                         }
                         Spacer()
                         Button { workspaces.refresh() } label: { Image(systemName: "arrow.clockwise") }
-                            .buttonStyle(.borderless).help("Refresh workspaces")
+                            .buttonStyle(.borderless).focusEffectDisabled().help("Refresh workspaces")
                     }.frame(height: 34)
                     if let error = workspaces.error {
                         Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(.orange).lineLimit(2).frame(height: 28)
