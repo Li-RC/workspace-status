@@ -43,19 +43,14 @@ func workspaceBadge(_ label: String, selected: Bool = true) -> NSImage {
     return image
 }
 
-func iconStrip(_ bundles: [String]) -> NSAttributedString {
-    guard !bundles.isEmpty else { return NSAttributedString(string: "") }
+func iconStrip(_ bundles: [String]) -> NSImage {
     let width = CGFloat(bundles.count * 21 + 4)
-    let image = NSImage(size: NSSize(width: width, height: 22), flipped: false) { _ in
+    return NSImage(size: NSSize(width: width, height: 22), flipped: false) { _ in
         for (index, bundle) in bundles.enumerated() {
             appIcon(bundle).draw(in: NSRect(x: CGFloat(index * 21 + 4), y: 3, width: 16, height: 16))
         }
         return true
     }
-    let attachment = NSTextAttachment()
-    attachment.image = image
-    attachment.bounds = NSRect(x: 0, y: (NSFont.systemFont(ofSize: 12).capHeight - 22) / 2, width: width, height: 22)
-    return NSAttributedString(attachment: attachment)
 }
 
 func overviewSize(visibleFrame: NSRect, anchor: NSRect, contentHeight: CGFloat = 240) -> NSSize {
@@ -261,7 +256,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let overviewState = OverviewState()
     private(set) var naturalHeight: CGFloat = 240
     var item: NSStatusItem!
-    private(set) var workspaceItems: [String: NSStatusItem] = [:]
+    private(set) var workspaceFrames: [String: NSRect] = [:]
+    private(set) var bellFrame = NSRect.zero
+    private var appearanceObservation: NSKeyValueObservation?
     private(set) var menuOrder: [String] = []
     let panel = OverviewPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                               backing: .buffered, defer: false)
@@ -273,8 +270,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.target = self
-        item.button?.action = #selector(toggle)
+        item.button?.action = #selector(menuBarClicked(_:))
         item.button?.sendAction(on: [.leftMouseDown])
+        item.button?.imagePosition = .imageLeft
+        item.button?.attributedTitle = NSAttributedString(string: "")
+        item.button?.imageHugsTitle = true
+        item.button?.toolTip = "Workspace Status: click a workspace to switch, or the bell for overview."
+        item.button?.setAccessibilityLabel("Workspace Status")
+        appearanceObservation = item.button?.observe(\.effectiveAppearance, options: [.old, .new]) { [weak self] _, change in
+            guard change.oldValue?.name != change.newValue?.name else { return }
+            self?.updateStatus()
+        }
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -318,69 +324,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func updateStatus() {
         let snapshot = workspaces.snapshot
-        let spaces = snapshot.menuSpaces
-        if spaces != menuOrder {
-            for status in workspaceItems.values { NSStatusBar.system.removeStatusItem(status) }
-            workspaceItems = [:]
-            // New status items appear to the left of existing ones.
-            for space in spaces.reversed() {
-                let status = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-                status.button?.target = self
-                status.button?.action = #selector(workspaceClicked(_:))
-                workspaceItems[space] = status
-            }
-            menuOrder = spaces
-        }
-        for space in spaces {
-            guard let button = workspaceItems[space]?.button else { continue }
-            let current = space == snapshot.current
-            button.image = workspaceBadge(current && workspaces.error != nil ? "!" : space, selected: current)
-            button.imagePosition = .imageLeft
+        menuOrder = snapshot.menuSpaces
+        workspaceFrames = [:]
+        var x: CGFloat = 0
+        for space in menuOrder {
+            let badge = workspaceBadge(space)
             let bundles = snapshot.appBundles(in: space)
-            button.attributedTitle = iconStrip(bundles)
-            // Four points of outer padding instead of the default status-item margins.
-            workspaceItems[space]?.length = button.image!.size.width + (bundles.isEmpty ? 0 : CGFloat(bundles.count * 21 + 4) + 2) + 4
-            button.imageHugsTitle = true
-            let names = snapshot.windows(in: space).map(\.app)
-            button.toolTip = "Workspace \(space): \(Array(Set(names)).sorted().joined(separator: ", ")). Click to switch workspace."
-            button.setAccessibilityLabel(button.toolTip)
+            let width = badge.size.width + (bundles.isEmpty ? 0 : CGFloat(bundles.count * 21 + 4) + 2) + 4
+            workspaceFrames[space] = NSRect(x: x, y: 0, width: width, height: 22)
+            x += width
         }
-        let badge = notifications.badges.first
-        let bell = NSImage(systemSymbolName: badge == nil ? "bell" : "bell.badge.fill", accessibilityDescription: "Workspace overview")!
-        if badge != nil { item.button?.image = bell.withSymbolConfiguration(.init(paletteColors: [.systemOrange])) }
-        else { bell.isTemplate = true; item.button?.image = bell }
-        item.button?.imagePosition = .imageLeft
-        item.button?.attributedTitle = NSAttributedString(string: "")
-        item.length = 24
-        item.button?.toolTip = badge.map { "Notifications: \($0.name). Click for overview." }
-            ?? "Workspace Status: click for overview."
-        item.button?.setAccessibilityLabel(item.button?.toolTip)
+        bellFrame = NSRect(x: x, y: 0, width: 24, height: 22)
+        let hasBadges = !notifications.badges.isEmpty
+        let bell = NSImage(systemSymbolName: hasBadges ? "bell.badge.fill" : "bell", accessibilityDescription: nil)!
+        let bellImage = hasBadges ? bell.withSymbolConfiguration(.init(paletteColors: [.systemOrange]))! : bell
+        bellImage.isTemplate = !hasBadges
+        let frames = workspaceFrames
+        let bellRect = bellFrame
+        // Drawing inside one standard status button keeps every workspace in Bartender's chosen section.
+        item.button?.image = NSImage(size: NSSize(width: x + 20, height: 22), flipped: true) { [weak self] _ in
+            guard let button = self?.item.button else { return false }
+            for space in snapshot.menuSpaces {
+                let frame = frames[space]!
+                let current = space == snapshot.current
+                let badge = workspaceBadge(current && self?.workspaces.error != nil ? "!" : space, selected: current)
+                (button.cell as! NSButtonCell).drawImage(badge, withFrame: NSRect(origin: frame.origin, size: badge.size), in: button)
+                let bundles = snapshot.appBundles(in: space)
+                if !bundles.isEmpty {
+                    let icons = iconStrip(bundles)
+                    icons.draw(in: NSRect(x: frame.minX + badge.size.width + 2, y: 0, width: icons.size.width, height: 22),
+                               from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+                }
+            }
+            let size = bellImage.size
+            (button.cell as! NSButtonCell).drawImage(bellImage,
+                withFrame: NSRect(x: bellRect.midX - size.width / 2 - 2, y: (22 - size.height) / 2,
+                                  width: size.width, height: size.height), in: button)
+            return true
+        }
+        item.length = x + 24
     }
 
-    @objc func workspaceClicked(_ sender: NSStatusBarButton) {
-        guard let space = workspaceItems.first(where: { $0.value.button === sender })?.key else { return }
+    func selectWorkspace(_ space: String) {
         panel.orderOut(nil)
         if space != workspaces.snapshot.current {
             workspaces.perform(["workspace", space], completion: {})
         }
     }
 
+    @objc func menuBarClicked(_ sender: NSStatusBarButton) {
+        if let event = NSApp.currentEvent, event.type == .leftMouseDown {
+            let point = sender.convert(event.locationInWindow, from: nil)
+            if let space = menuOrder.first(where: { workspaceFrames[$0]!.contains(point) }) {
+                selectWorkspace(space)
+                return
+            }
+        }
+        toggle()
+    }
+
     @objc func toggle() {
-        guard let button = item.button else { return }
-        showOverview(from: button)
+        showOverview()
     }
 
     func dismissIfOutside(at point: NSPoint) {
         guard panel.isVisible, !panel.frame.contains(point) else { return }
         if let button = item.button, let window = button.window,
-           window.convertToScreen(button.convert(button.bounds, to: nil)).contains(point) { return }
+           window.convertToScreen(button.convert(bellFrame, to: nil)).contains(point) { return }
         panel.orderOut(nil)
     }
 
-    private func showOverview(from button: NSStatusBarButton) {
+    private func showOverview() {
         if panel.isVisible { panel.orderOut(nil); return }
-        guard let window = button.window, let screen = window.screen else { return }
-        let anchor = window.convertToScreen(button.convert(button.bounds, to: nil))
+        guard let button = item.button, let window = button.window, let screen = window.screen else { return }
+        let anchor = window.convertToScreen(button.convert(bellFrame, to: nil))
         hosting.rootView.width = max(1, min(360, screen.visibleFrame.width - 28))
         fitOverview(visibleFrame: screen.visibleFrame, anchor: anchor)
         if !CommandLine.arguments.contains("--layout-test") { workspaces.refresh() }
@@ -399,7 +416,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         naturalHeight = height
         guard panel.isVisible, let button = item.button, let window = button.window,
               let screen = window.screen else { return }
-        let anchor = window.convertToScreen(button.convert(button.bounds, to: nil))
+        let anchor = window.convertToScreen(button.convert(bellFrame, to: nil))
         fitOverview(visibleFrame: screen.visibleFrame, anchor: anchor)
     }
 
