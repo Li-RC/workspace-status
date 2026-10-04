@@ -337,7 +337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         bellFrame = NSRect(x: x, y: 0, width: 24, height: 22)
         let hasBadges = !notifications.badges.isEmpty
         let bell = NSImage(systemSymbolName: hasBadges ? "bell.badge.fill" : "bell", accessibilityDescription: nil)!
-        let bellImage = hasBadges ? bell.withSymbolConfiguration(.init(paletteColors: [.controlAccentColor]))! : bell
+        let bellImage = hasBadges ? bell.withSymbolConfiguration(.init(paletteColors: [.systemOrange]))! : bell
         bellImage.isTemplate = !hasBadges
         let frames = workspaceFrames
         let bellRect = bellFrame
