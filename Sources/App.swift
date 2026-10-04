@@ -75,7 +75,7 @@ struct WorkspaceSurface: ViewModifier {
     @ViewBuilder func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
             content.glassEffect(.regular.interactive(),
-                                in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         } else {
             content.background(Color.secondary.opacity(0.05),
                                in: RoundedRectangle(cornerRadius: 10))
