@@ -145,13 +145,13 @@ final class MenuPlacement: ObservableObject {
                 view.setAccessibilityElement(true)
                 view.setAccessibilityRole(.button)
                 view.setAccessibilityLabel("Workspace Status")
-                view.setAccessibilityHelp("Click a workspace to switch, an app to focus, or the bell for overview. Double-click any app to focus it.")
                 view.click = click
                 view.contextClick = contextClick
                 overlay.contentView = view
                 overlays[id] = overlay
             }
             let view = overlay.contentView as! MenuStripView
+            view.setAccessibilityHelp(item.button?.toolTip)
             view.image = image; view.contentWidth = item.length
             view.appearance = item.button?.effectiveAppearance
             overlay.setFrame(frame, display: false)
@@ -168,6 +168,7 @@ final class MenuPlacement: ObservableObject {
         guard let item, let image = image?() else { return }
         for overlay in overlays.values {
             let view = overlay.contentView as! MenuStripView
+            view.setAccessibilityHelp(item.button?.toolTip)
             view.image = image; view.contentWidth = item.length
             view.needsDisplay = true
         }

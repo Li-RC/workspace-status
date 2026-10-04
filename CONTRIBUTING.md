@@ -33,7 +33,7 @@ app_binary="dist/Workspace Status.app/Contents/MacOS/WorkspaceStatus"
 | Check | Coverage |
 | --- | --- |
 | `--self-test` | JSON decoding, workspace ordering/filtering, app deduplication, placement and sizing, streamed focus history, settings persistence, and injected login registration/approval/error states; also runs during the build |
-| `--settings-test` | Single settings window, close/reopen and keyboard commands, bell-only context menus for native/positioned strips, immediate preferences and onscreen window recovery; uses an isolated defaults suite and does not register login items |
+| `--settings-test` | Single settings window, close/reopen and keyboard commands, bell-only context menus, compact mode and immediate preferences on native/positioned strips, and onscreen window recovery; uses an isolated defaults suite and does not register login items |
 | `--diagnose` | Live workspace and application data, Accessibility state, and menu geometry counts when permission is available; excludes window titles |
 | `--smoke-test` | Eight-second run checking live workspace loading and menu bar image creation; quit any existing instance first |
 | `--menu-test` | Native menu bar ordering, complete app icons, compact spacing, single/double click routing, preserved app targets after rearrangement, and a persistent grouped item through workspace insertion and removal |

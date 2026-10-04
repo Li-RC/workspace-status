@@ -6,15 +6,17 @@ func runSettingsStoreTests() {
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
     let settings = SettingsStore(defaults: defaults)
-    precondition(settings.menuBarPosition == .automatic && settings.dockBadgesEnabled)
+    precondition(settings.menuBarPosition == .automatic && settings.dockBadgesEnabled && !settings.compactViewEnabled)
     var changes = 0
     settings.changed = { changes += 1 }
     settings.menuBarPosition = .system
     settings.dockBadgesEnabled = false
     settings.dockBadgesEnabled = false
-    precondition(changes == 2, "Unchanged preferences caused extra updates")
+    settings.compactViewEnabled = true
+    settings.compactViewEnabled = true
+    precondition(changes == 3, "Unchanged preferences caused extra updates")
     let reloaded = SettingsStore(defaults: defaults)
-    precondition(reloaded.menuBarPosition == .system && !reloaded.dockBadgesEnabled,
+    precondition(reloaded.menuBarPosition == .system && !reloaded.dockBadgesEnabled && reloaded.compactViewEnabled,
                  "Preferences were lost after reloading")
     defaults.set("unknown", forKey: "menuBarPosition")
     precondition(SettingsStore(defaults: defaults).menuBarPosition == .automatic)
@@ -65,10 +67,53 @@ func runSettingsTest(args: [String]) {
     let application = NSApplication.shared
     let delegate = AppDelegate(settings: SettingsStore(defaults: defaults))
     application.delegate = delegate
+    func checkCompactMenu() {
+        let item = delegate.item!, button = item.button!
+        let fullWidth = item.length, order = delegate.menuOrder
+        let windows = delegate.workspaces.snapshot.windows.count
+        func point(_ x: CGFloat) -> NSPoint {
+            if let overlay = delegate.placement.overlays.values.first(where: \.isVisible),
+               let view = overlay.contentView as? MenuStripView {
+                return NSPoint(x: overlay.frame.minX + view.contentOriginX + x * view.scale, y: overlay.frame.midY)
+            }
+            return button.window!.convertPoint(toScreen: button.convert(NSPoint(x: x, y: 11), to: nil))
+        }
+        let padding = delegate.placement.usesOverlays ? 2 : button.cell!.imageRect(forBounds: button.bounds).minX
+        let appPoint = point(delegate.appFrames["1"]!["com.apple.finder"]!.midX + padding)
+        precondition(delegate.menuNavigation(at: appPoint, timestamp: 100).arguments == ["workspace", "1"])
+        delegate.settings.compactViewEnabled = true
+        precondition(delegate.item === item && item.length < fullWidth && delegate.menuOrder == order)
+        precondition(delegate.appFrames.values.allSatisfy(\.isEmpty), "Compact view left hidden app click targets")
+        precondition(delegate.workspaces.snapshot.windows.count == windows,
+                     "Compact view removed applications from the dropdown data")
+        precondition(delegate.menuNavigation(at: appPoint, timestamp: 100 + NSEvent.doubleClickInterval / 2).arguments
+                     != ["focus", "--window-id", "0"], "Compact view retained a hidden double-click target")
+        for (index, space) in order.enumerated() {
+            let expected = space == delegate.workspaces.snapshot.current ? nil : ["workspace", space]
+            let click = delegate.menuNavigation(at: point(delegate.workspaceFrames[space]!.midX), timestamp: Double(110 + index * 10))
+            precondition(click.workspaceClick && click.arguments == expected, "Compact workspace could not be selected")
+        }
+        let bell = point(delegate.bellFrame.midX)
+        precondition(!delegate.menuNavigation(at: bell, timestamp: 160).workspaceClick)
+        precondition(delegate.bellContextMenu(at: bell) != nil, "Compact bell lost its context menu")
+        if let overlay = delegate.placement.overlays.values.first(where: \.isVisible),
+           let view = overlay.contentView as? MenuStripView {
+            precondition(view.contentWidth == item.length && view.image === delegate.statusImage,
+                         "Positioned strip retained the full-size layout")
+        }
+        if let index = args.firstIndex(of: "--render-compact-preview"), args.count > index + 1 {
+            let bitmap = NSBitmapImageRep(data: delegate.statusImage!.tiffRepresentation!)!
+            try! bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[index + 1]))
+        }
+        delegate.settings.compactViewEnabled = false
+        precondition(item.length == fullWidth && delegate.appFrames.values.contains { !$0.isEmpty },
+                     "Disabling compact view did not restore application icons")
+    }
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
         delegate.workspaces.snapshot = menuFixture()
         delegate.updateStatus()
         let item = delegate.item!, button = item.button!, native = button.window!, screen = native.screen!
+        checkCompactMenu()
         let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID
         let bell = native.convertPoint(toScreen: button.convert(NSPoint(x: delegate.bellFrame.midX, y: 11), to: nil))
         let space = native.convertPoint(toScreen: button.convert(NSPoint(x: delegate.workspaceFrames["1"]!.midX, y: 11), to: nil))
@@ -113,6 +158,8 @@ func runSettingsTest(args: [String]) {
         precondition(delegate.bellContextMenu(at: overlayBell)?.items.first?.title == "Settings…")
         let overlaySpace = NSPoint(x: frame.minX + view.contentOriginX + delegate.workspaceFrames["1"]!.midX * view.scale, y: frame.midY)
         precondition(delegate.bellContextMenu(at: overlaySpace) == nil)
+        checkCompactMenu()
+        print("Compact view sizing, workspace/bell routing, hidden-app target cancellation and restoration on both renderers: PASS")
         delegate.settings.menuBarPosition = .system
         precondition(!delegate.placement.usesOverlays && item.isVisible && item.button?.image === delegate.statusImage,
                      "System position did not restore the native item")
@@ -127,35 +174,39 @@ func runSettingsTest(args: [String]) {
         precondition(saved.menuBarPosition == .automatic && !saved.dockBadgesEnabled)
         defaults.removePersistentDomain(forName: suite)
         delegate.workspaces.stop(); delegate.notifications.stop(); delegate.placement.stop()
-        // Application activation is asynchronous; check focus after returning to the event loop.
+        // Let the menu bar host finish resizing/restoring before checking settings activation.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            precondition(delegate.settingsWindow === controller)
-            precondition(!delegate.notifications.monitoringEnabled && delegate.notifications.badges.isEmpty,
-                         "A completed scan repopulated disabled notifications")
-            print("Settings window visible: \(window.isVisible), key: \(window.isKeyWindow), app active: \(application.isActive)")
-            if !args.contains("--hold-settings-preview") {
-                precondition(window.isKeyWindow && application.isActive, "Settings became visible without keyboard focus")
-            }
-            print("Settings reuse/reopen/close, command-comma, bell-only context menus on both renderers and live preferences: PASS")
-            if let index = args.firstIndex(of: "--render-settings-preview"), args.count > index + 1,
-               let view = window.contentView?.superview {
-                view.layoutSubtreeIfNeeded()
-                let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
-                view.cacheDisplay(in: view.bounds, to: bitmap)
-                try! bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[index + 1]))
-            }
-            if !args.contains("--hold-settings-preview") {
-                window.miniaturize(nil)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    delegate.showSettings(nil)
+            delegate.showSettings(nil)
+            // Application activation is asynchronous; check focus after returning to the event loop.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                precondition(delegate.settingsWindow === controller)
+                precondition(!delegate.notifications.monitoringEnabled && delegate.notifications.badges.isEmpty,
+                             "A completed scan repopulated disabled notifications")
+                print("Settings window visible: \(window.isVisible), key: \(window.isKeyWindow), app active: \(application.isActive)")
+                if !args.contains("--hold-settings-preview") {
+                    precondition(window.isKeyWindow && application.isActive, "Settings became visible without keyboard focus")
+                }
+                print("Settings reuse/reopen/close, command-comma, bell-only context menus on both renderers and live preferences: PASS")
+                if let index = args.firstIndex(of: "--render-settings-preview"), args.count > index + 1,
+                   let view = window.contentView?.superview {
+                    view.layoutSubtreeIfNeeded()
+                    let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds)!
+                    view.cacheDisplay(in: view.bounds, to: bitmap)
+                    try! bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[index + 1]))
+                }
+                if !args.contains("--hold-settings-preview") {
+                    window.miniaturize(nil)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        precondition(!window.isMiniaturized && window.isKeyWindow, "Reopening did not restore minimized Settings")
-                        let close = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
-                            timestamp: 3, windowNumber: window.windowNumber, context: nil, characters: "w", charactersIgnoringModifiers: "w", isARepeat: false, keyCode: 13)!
-                        precondition(application.mainMenu!.performKeyEquivalent(with: close) && !window.isVisible,
-                                     "Command-W did not close only Settings")
-                        print("Settings keyboard focus, minimized restoration and Command-W dismissal: PASS")
-                        exit(0)
+                        delegate.showSettings(nil)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            precondition(!window.isMiniaturized && window.isKeyWindow, "Reopening did not restore minimized Settings")
+                            let close = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+                                timestamp: 3, windowNumber: window.windowNumber, context: nil, characters: "w", charactersIgnoringModifiers: "w", isARepeat: false, keyCode: 13)!
+                            precondition(application.mainMenu!.performKeyEquivalent(with: close) && !window.isVisible,
+                                         "Command-W did not close only Settings")
+                            print("Settings keyboard focus, minimized restoration and Command-W dismissal: PASS")
+                            exit(0)
+                        }
                     }
                 }
             }

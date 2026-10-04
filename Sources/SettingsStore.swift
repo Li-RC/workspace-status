@@ -24,10 +24,18 @@ final class SettingsStore: ObservableObject {
             changed?()
         }
     }
+    @Published var compactViewEnabled: Bool {
+        didSet {
+            guard compactViewEnabled != oldValue else { return }
+            defaults.set(compactViewEnabled, forKey: "compactViewEnabled")
+            changed?()
+        }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         menuBarPosition = MenuBarPosition(rawValue: defaults.string(forKey: "menuBarPosition") ?? "") ?? .automatic
         dockBadgesEnabled = defaults.object(forKey: "dockBadgesEnabled") as? Bool ?? true
+        compactViewEnabled = defaults.bool(forKey: "compactViewEnabled")
     }
 }

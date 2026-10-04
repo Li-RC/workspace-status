@@ -30,6 +30,11 @@ struct SettingsView: View {
 
             Form {
                 Section {
+                    Toggle("Compact view", isOn: $settings.compactViewEnabled)
+                    Text("Show workspace numbers without application icons in the menu bar. Applications remain available in the dropdown.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } header: { Text("Content") }
+                Section {
                     Picker("Placement", selection: $settings.menuBarPosition) {
                         ForEach(MenuBarPosition.allCases) { position in Text(position.title).tag(position) }
                     }

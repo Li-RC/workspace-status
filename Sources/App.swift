@@ -41,7 +41,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.imagePosition = .imageLeft
         item.button?.attributedTitle = NSAttributedString(string: "")
         item.button?.imageHugsTitle = true
-        item.button?.toolTip = "Workspace Status: click a workspace to switch, an app in the current workspace to focus, or the bell for overview. Double-click any app to focus it."
         item.button?.setAccessibilityLabel("Workspace Status")
         appearanceObservation = item.button?.observe(\.effectiveAppearance, options: [.old, .new]) { [weak self] _, change in
             guard change.oldValue?.name != change.newValue?.name else { return }
@@ -119,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func applySettings() {
+        lastAppClick = nil
         placement.automatic = settings.menuBarPosition == .automatic
         notifications.setMonitoring(settings.dockBadgesEnabled)
         updateStatus()
@@ -162,13 +162,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func updateStatus() {
         let snapshot = workspaces.snapshot
+        let compact = settings.compactViewEnabled
+        item.button?.toolTip = compact ? "Workspace Status: click a workspace to switch or the bell for overview."
+            : "Workspace Status: click a workspace to switch, an app in the current workspace to focus, or the bell for overview. Double-click any app to focus it."
         menuOrder = snapshot.menuSpaces
         workspaceFrames = [:]
         appFrames = [:]
         var x: CGFloat = 0
         for space in menuOrder {
             let badge = workspaceBadge(space)
-            let bundles = snapshot.appBundles(in: space)
+            let bundles = compact ? [] : snapshot.appBundles(in: space)
             let width = badge.size.width + (bundles.isEmpty ? 0 : CGFloat(bundles.count * 21 + 4) + 2) + 4
             workspaceFrames[space] = NSRect(x: x, y: 0, width: width, height: 22)
             appFrames[space] = Dictionary(uniqueKeysWithValues: bundles.enumerated().map { index, bundle in
@@ -191,7 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let current = space == snapshot.current
                 let badge = workspaceBadge(current && self?.workspaces.error != nil ? "!" : space, selected: current)
                 (button.cell as! NSButtonCell).drawImage(badge, withFrame: NSRect(origin: frame.origin, size: badge.size), in: button)
-                let bundles = snapshot.appBundles(in: space)
+                let bundles = compact ? [] : snapshot.appBundles(in: space)
                 if !bundles.isEmpty {
                     let icons = iconStrip(bundles)
                     icons.draw(in: NSRect(x: frame.minX + badge.size.width + 2, y: 0, width: icons.size.width, height: 22),

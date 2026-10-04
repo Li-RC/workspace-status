@@ -82,11 +82,13 @@ Open the bell dropdown and click the gear beside Refresh, or right-click the bel
 | Section | Options |
 | --- | --- |
 | General | Launch at login and its macOS registration/approval status |
-| Menu Bar | Automatic display-aware placement or the normal system position |
+| Menu Bar | Compact view, automatic display-aware placement or the normal system position |
 | Notifications | Show Dock badges, Accessibility status and access to permission settings |
 | About | App version/build, repository and MIT license |
 
 Preferences take effect immediately and persist across restarts. Automatic placement and Dock badge monitoring are enabled by default. Choose **System position** to let macOS or a menu bar manager handle placement. Disabling Dock badges stops badge monitoring without affecting workspace navigation or permission for automatic placement.
+
+Enable **Compact view** under **Menu Bar** to show workspace numbers without application icons in the menu bar. Workspace switching and the bell remain available, and the dropdown still shows all applications and windows. Compact view is off by default.
 
 Settings follows system appearance. Closing its window or pressing **⌘W** keeps the menu bar app running. Startup at login does not open Settings.
 
