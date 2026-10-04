@@ -47,52 +47,59 @@ if args.contains("--self-test") {
     let delegate = AppDelegate()
     application.delegate = delegate
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-        delegate.workspaces.snapshot = menuFixture()
+        let fixture = menuFixture()
+        delegate.workspaces.snapshot = fixture
         delegate.updateStatus()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            let spaces = delegate.menuOrder
-            precondition(spaces == ["1", "2", "3", "10"])
-            let buttons = spaces.map { delegate.workspaceItems[$0]!.button! }
-            let positions = buttons.map { $0.window!.convertToScreen($0.convert($0.bounds, to: nil)).midX }
-            precondition(positions == positions.sorted(), "Native menu bar order is reversed")
-            let attachment = buttons[0].attributedTitle.attribute(.attachment, at: 0, effectiveRange: nil) as! NSTextAttachment
-            precondition(attachment.image!.size.width == 8 * 21 + 4, "App icons were truncated")
-            precondition(buttons.allSatisfy { $0.image?.isTemplate == true })
-            print("Native menu order: \(spaces.joined(separator: ", "))")
-            print("Native button positions: \(positions)")
-            print("All 8 application icons: PASS")
-            for button in buttons {
-                let imageRect = button.cell!.imageRect(forBounds: button.bounds)
-                let titleRect = button.cell!.titleRect(forBounds: button.bounds)
-                precondition(imageRect.minX >= 1 && imageRect.maxX <= button.bounds.maxX - 1, "Workspace badge clipped")
-                precondition(titleRect.maxX <= button.bounds.maxX - 1, "Application icons clipped")
-                precondition(imageRect.minX <= 3, "Workspace padding is too wide")
-            }
-            print("Compact padding and uncut icon bounds: PASS")
-            let currentButton = delegate.workspaceItems["3"]!.button!
-            delegate.workspaceClicked(currentButton)
-            precondition(!delegate.panel.isVisible, "A workspace click opened the dropdown")
-            precondition(delegate.workspaces.snapshot.current == "3", "Current workspace click changed the workspace")
-            print("Current workspace click keeps dropdown closed: PASS")
-            if let index = args.firstIndex(of: "--render-menu-preview"), args.count > index + 1 {
-                let previewButtons = buttons + [delegate.item.button!]
-                let width = previewButtons.reduce(CGFloat(0)) { $0 + $1.bounds.width }
-                let canvas = NSImage(size: NSSize(width: width, height: 22))
-                canvas.lockFocus()
-                NSColor.black.setFill(); NSRect(x: 0, y: 0, width: width, height: 22).fill()
-                var x: CGFloat = 0
-                for button in previewButtons {
-                    let bitmap = button.bitmapImageRepForCachingDisplay(in: button.bounds)!
-                    button.cacheDisplay(in: button.bounds, to: bitmap)
-                    let image = NSImage(size: button.bounds.size); image.addRepresentation(bitmap)
-                    image.draw(in: NSRect(x: x, y: 0, width: button.bounds.width, height: 22))
-                    x += button.bounds.width
+            precondition(delegate.menuOrder == ["1", "2", "3", "10"])
+            let originalItem = delegate.item!
+            let button = originalItem.button!
+            let imageRect = button.cell!.imageRect(forBounds: button.bounds)
+            precondition(imageRect.minX >= 1 && imageRect.minX <= 3, "Menu bar padding changed")
+            precondition(imageRect.maxX <= button.bounds.maxX - 1, "Menu bar image clipped")
+            precondition(iconStrip(fixture.appBundles(in: "1")).size.width == 8 * 21 + 4,
+                         "App icons were truncated")
+            let added = Snapshot(spaces: fixture.spaces + ["4"], current: fixture.current,
+                windows: fixture.windows + [AppWindow(id: 100, app: "Finder", bundle: "com.apple.finder", title: "Added workspace", workspace: "4")])
+            let emptyCurrent = Snapshot(spaces: fixture.spaces + ["5"], current: "5", windows: fixture.windows)
+            for snapshot in [added, emptyCurrent, fixture, added, fixture] {
+                delegate.workspaces.snapshot = snapshot
+                delegate.updateStatus()
+                precondition(delegate.item === originalItem && delegate.item.button === button,
+                             "Workspace updates replaced the menu bar item")
+                precondition(delegate.menuOrder == snapshot.menuSpaces)
+                precondition(Set(delegate.workspaceFrames.keys) == Set(snapshot.menuSpaces),
+                             "Workspace updates left missing or stale click regions")
+                var rightEdge: CGFloat = 0
+                for space in delegate.menuOrder {
+                    let frame = delegate.workspaceFrames[space]!
+                    precondition(abs(frame.minX - rightEdge) < 0.5, "Workspace regions overlap or have a gap")
+                    rightEdge = frame.maxX
                 }
-                canvas.unlockFocus()
-                let bitmap = NSBitmapImageRep(data: canvas.tiffRepresentation!)!
+                precondition(abs(delegate.bellFrame.minX - rightEdge) < 0.5, "Bell is detached from the workspace group")
+                precondition(abs(delegate.bellFrame.maxX - delegate.item.length) < 0.5, "Controls extend beyond their menu bar item")
+            }
+            print("Workspace insertion, removal and empty-current changes keep one persistent menu bar item: PASS")
+            print("Ordered workspace regions, compact padding and all 8 application icons: PASS")
+            if let index = args.firstIndex(of: "--render-menu-preview"), args.count > index + 1 {
+                let bitmap = button.bitmapImageRepForCachingDisplay(in: button.bounds)!
+                button.cacheDisplay(in: button.bounds, to: bitmap)
                 try! bitmap.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[index + 1]))
             }
-            exit(0)
+            let frame = delegate.workspaceFrames[fixture.current]!
+            let point = button.convert(NSPoint(x: frame.midX, y: frame.midY), to: nil)
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: button.window!.windowNumber,
+                    context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
+                application.postEvent(event, atStart: false)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                precondition(!delegate.panel.isVisible, "A workspace click opened the dropdown")
+                precondition(delegate.workspaces.snapshot.current == fixture.current, "Current workspace click changed the workspace")
+                print("Native workspace click keeps dropdown closed: PASS")
+                if !args.contains("--hold-menu-preview") { exit(0) }
+            }
         }
     }
     application.run()
@@ -165,7 +172,7 @@ if args.contains("--self-test") {
     application.delegate = delegate
     func clickBell(_ index: Int) {
         guard let button = delegate.item.button, let window = button.window else { exit(1) }
-        let point = button.convert(NSPoint(x: button.bounds.midX, y: button.bounds.midY), to: nil)
+        let point = button.convert(NSPoint(x: delegate.bellFrame.midX, y: delegate.bellFrame.midY), to: nil)
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
                 timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
@@ -191,8 +198,8 @@ if args.contains("--self-test") {
     let delegate = AppDelegate()
     application.delegate = delegate
     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-        if let button = delegate.workspaceItems[delegate.workspaces.snapshot.current]?.button {
-            delegate.workspaceClicked(button)
+        if delegate.workspaceFrames[delegate.workspaces.snapshot.current] != nil {
+            delegate.selectWorkspace(delegate.workspaces.snapshot.current)
             precondition(!delegate.panel.isVisible, "Current workspace must not open the popup")
         }
         delegate.toggle()
@@ -221,6 +228,7 @@ if args.contains("--self-test") {
             print("Popup content frame: \(contentFrame)")
             print("Display usable frame: \(available)")
             print("Content size: \(delegate.panel.contentView!.bounds.size)")
+            print("Popup opacity: \(window.alphaValue)")
             precondition(window.alphaValue > 0.99, "Popup fade did not complete")
             print("Status button flipped: \(delegate.item.button?.isFlipped ?? false)")
             precondition(!window.styleMask.contains(.titled), "Popup has window chrome")
@@ -249,7 +257,7 @@ if args.contains("--self-test") {
             }
             print("Popup containment: \(fits ? "PASS" : "FAIL")")
             let bell = delegate.item.button!
-            let bellFrame = bell.window!.convertToScreen(bell.convert(bell.bounds, to: nil))
+            let bellFrame = bell.window!.convertToScreen(bell.convert(delegate.bellFrame, to: nil))
             delegate.dismissIfOutside(at: NSPoint(x: bellFrame.midX, y: bellFrame.midY))
             precondition(delegate.panel.isVisible, "Bell mouse-down dismissed the popup before its toggle action")
             delegate.toggle()

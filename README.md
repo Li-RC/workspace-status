@@ -21,7 +21,7 @@ Workspace Status is a native macOS menu bar app for [AeroSpace](https://nikitabo
 - **Unread indicators.** An orange bell highlights apps with Dock badges. View those apps and their badge values under **Notifications**.
 - **Local operation.** No third-party packages or network services. Workspace updates follow AeroSpace events, and the app leaves your window manager configuration untouched.
 
-> This README describes Workspace Status 1.1.0. Earlier releases may have a different feature set.
+> This README describes the current source. Changes after 1.1.0 have not been released yet.
 
 ## Requirements
 
@@ -56,7 +56,9 @@ Local builds are ad-hoc signed and are not notarized.
 | Refresh | Reload workspace information |
 | Quit | Exit Workspace Status |
 
-Menu bar app icons belong to their workspace button. Individual app selection is available inside the dropdown. The current workspace keeps its menu bar indicator even when empty.
+Each menu bar app icon selects its workspace. Individual app selection is available inside the dropdown. The current workspace keeps its menu bar indicator even when empty.
+
+The workspace controls and bell share one native menu bar item. Bartender can show, hide, or move the complete group; adding or removing a workspace resizes that same item. Individual workspaces cannot be rearranged or hidden separately in Bartender.
 
 Click outside the dropdown or press **Escape** to close it. The dropdown grows downward without scrolling; if its contents exceed the display height, it scales to fit. Opening animations respect **Reduce Motion**.
 
@@ -110,10 +112,18 @@ app_binary="dist/Workspace Status.app/Contents/MacOS/WorkspaceStatus"
 | `--self-test` | JSON decoding, workspace ordering and filtering, app deduplication, and display size limits; also runs during the build |
 | `--diagnose` | Live workspace and application data plus Accessibility state, excluding window titles |
 | `--smoke-test` | Eight-second run checking live workspace loading and menu bar image creation; quit any existing instance first |
-| `--menu-test` | Native menu bar ordering, complete app icons, compact spacing, and current-workspace clicks |
+| `--menu-test` | Native menu bar ordering, complete app icons, compact spacing, current-workspace clicks, and a persistent grouped item through workspace insertion and removal |
 | `--layout-test` | Expansion, added workspaces, collapse, a fixed top edge, and a tall list fitting without scrolling |
 | `--bell-click-test` | Four native bell clicks verifying open → closed → open → closed |
 | `--popover-test` | Popup containment, transparent background, completed fade, and dismissal behavior |
+
+On macOS 27, launch UI checks through Launch Services. Direct executable launches can report a zero-height menu bar window. Use `open` with the check's arguments and inspect both logs for failures; `open` does not report the app's test exit status:
+
+```sh
+open -n -W -o /tmp/workspace-status-check.log --stderr /tmp/workspace-status-check-error.log \
+  "dist/Workspace Status.app" --args --menu-test
+cat /tmp/workspace-status-check.log /tmp/workspace-status-check-error.log
+```
 
 The checks do not switch your workspaces or generate notifications. Menu and layout tests use synthetic data. Inactive-workspace switching and individual app focus still require manual validation.
 
