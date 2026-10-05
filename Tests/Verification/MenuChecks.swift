@@ -47,8 +47,10 @@ func runAppClickTest() {
 }
 
 func runPlacementTest() {
+    let suite = "WorkspaceStatus.placement-check.\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
     let application = NSApplication.shared
-    let delegate = AppDelegate()
+    let delegate = AppDelegate(settings: SettingsStore(defaults: defaults))
     application.delegate = delegate
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
         let fixture = menuFixture()
@@ -59,7 +61,8 @@ func runPlacementTest() {
         let screen = native.screen!
         let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID
         let nativeFrame = native.convertToScreen(button.convert(button.bounds, to: nil))
-        let requestedFrame = NSRect(x: nativeFrame.minX, y: screen.frame.maxY - 39, width: item.length * 0.75, height: 39)
+        let height = native.frame.height
+        let requestedFrame = NSRect(x: nativeFrame.minX, y: screen.frame.maxY - height, width: item.length * 0.75, height: height)
         // Install the real renderer and click callback without starting live geometry polling.
         delegate.placement.start(item: item, image: { delegate.statusImage },
             click: { point, time in delegate.clickMenuBar(at: point, timestamp: time) })
@@ -68,6 +71,7 @@ func runPlacementTest() {
         let overlay = delegate.placement.overlays[id]!
         let frame = overlay.frame
         let view = overlay.contentView as! MenuStripView
+        print("Positioned fixture: frame=\(frame), scale=\(view.scale), content width=\(item.length)")
         precondition(!item.isVisible && delegate.placement.usesOverlays && overlay.isVisible)
         precondition(!overlay.isOpaque && !overlay.hasShadow && abs(view.scale - 0.75) <= 1 / item.length,
                      "Positioned strip opacity=\(overlay.isOpaque), shadow=\(overlay.hasShadow), scale=\(view.scale), bounds=\(view.bounds)")
@@ -75,6 +79,12 @@ func runPlacementTest() {
         func point(_ x: CGFloat, _ y: CGFloat? = nil) -> NSPoint {
             NSPoint(x: frame.minX + x * view.scale, y: y ?? frame.midY)
         }
+        let workspaceEdge = point(delegate.workspaceFrames["2"]!.maxX + 2 - 0.25)
+        guard delegate.menuNavigation(at: workspaceEdge, timestamp: 100).arguments == ["workspace", "2"] else {
+            print("FAIL: the right edge of a drawn workspace selected its neighbour")
+            exit(1)
+        }
+        print("Drawn workspace edge routes to its own group: PASS")
         let preview = delegate.appFrames["2"]!["com.apple.Preview"]!
         let finder = delegate.appFrames["1"]!["com.apple.finder"]!
         for (index, y) in [frame.minY + 1, frame.midY, frame.maxY - 1].enumerated() {
@@ -91,12 +101,13 @@ func runPlacementTest() {
         precondition(view.image === delegate.statusImage && view.contentWidth == item.length,
                      "The positioned strip showed stale icons while click regions updated")
         precondition(delegate.menuNavigation(at: previewPoint, timestamp: 55).arguments == ["focus", "--window-id", "21"])
+        print("Positioned app routing and double-click target preservation: PASS")
         delegate.placement.display(frames: [id: frame], reserveNativeSlot: true)
         precondition(item.isVisible, "A mixed-display setup lost its reserved native position")
         let bell = point(delegate.bellFrame.midX)
         delegate.clickMenuBar(at: bell)
         precondition(delegate.panel.isPresented, "A positioned bell could not open the dropdown")
-        precondition(delegate.panel.frame.maxY <= frame.minY && screen.visibleFrame.contains(delegate.panel.frame),
+        precondition(delegate.panel.frame.maxY <= frame.midY - 11 * view.scale && screen.visibleFrame.contains(delegate.panel.frame),
                      "The positioned bell anchored the dropdown to the wrong screen")
         delegate.dismissIfOutside(at: point(delegate.bellFrame.midX, frame.maxY - 1))
         precondition(delegate.panel.isPresented, "The positioned bell was treated as an outside click")
@@ -108,6 +119,56 @@ func runPlacementTest() {
         precondition(view.accessibilityPerformPress() && delegate.panel.isPresented,
                      "Accessibility activation could not open the positioned dropdown")
         delegate.panel.dismiss()
+        var timestamp: TimeInterval = 1000
+        for compact in [false, true] {
+            delegate.settings.compactViewEnabled = compact
+            for factor in [CGFloat(1), 0.75, 0.4] {
+                let centered = menuStripFrame(screen: screen.frame, hasNotch: false, native: nil,
+                    menuEnd: screen.frame.minX + 40, statusStart: screen.frame.maxX,
+                    width: item.length, workspaceWidth: delegate.bellFrame.minX, height: height)!
+                var requested = centered
+                requested.size.width *= factor
+                delegate.placement.display(frames: [id: requested], reserveNativeSlot: false)
+                let placed = overlay.frame
+                // Derive target points from the drawable image inset, independently of hit testing.
+                let scale = min(1, view.bounds.width / item.length)
+                let origin = placed.minX + (view.bounds.width - item.length * scale) / 2 + 2 * scale
+                if factor == 1 {
+                    precondition(abs(origin + delegate.bellFrame.minX / 2 - screen.frame.midX) < 1,
+                                 "The workspace group included the bell in its center")
+                }
+                func drawnPoint(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
+                    NSPoint(x: origin + x * scale, y: y)
+                }
+                for space in delegate.menuOrder {
+                    let region = delegate.workspaceFrames[space]!
+                    let expected = space == "2" ? nil : ["workspace", space]
+                    for x in [region.minX + 0.25, region.maxX - 0.25] {
+                        for y in [placed.minY + 1, placed.midY, placed.maxY - 1] {
+                            timestamp += 2
+                            let result = delegate.menuNavigation(at: drawnPoint(x, y), timestamp: timestamp)
+                            precondition(result.workspaceClick && result.arguments == expected,
+                                         "A drawn workspace edge selected the wrong group")
+                        }
+                    }
+                }
+                for (bundle, region) in delegate.appFrames["2"] ?? [:] {
+                    let expected = delegate.workspaces.navigationArguments(to: "2", appBundle: bundle)
+                    for x in [region.minX + 0.25, region.maxX - 0.25] {
+                        timestamp += 2
+                        precondition(delegate.menuNavigation(at: drawnPoint(x, placed.midY), timestamp: timestamp).arguments == expected,
+                                     "A drawn app edge did not focus its application")
+                    }
+                }
+                let bell = drawnPoint(delegate.bellFrame.midX, placed.midY)
+                precondition(delegate.bellContextMenu(at: bell) != nil)
+                precondition(delegate.bellContextMenu(at: drawnPoint(delegate.bellFrame.minX - 0.25, placed.midY)) == nil,
+                             "The bell context menu overlaps a drawn workspace")
+            }
+        }
+        delegate.settings.compactViewEnabled = false
+        defaults.removePersistentDomain(forName: suite)
+        print("Workspace-only centering and exact workspace/app edges in full, compact and scaled strips: PASS")
         delegate.placement.stop()
         precondition(item.isVisible && !delegate.placement.usesOverlays && !overlay.isVisible)
         precondition(item.button?.image === delegate.statusImage, "Stopping placement did not restore the native strip")
@@ -161,7 +222,7 @@ func runMenuTest(args: [String]) {
             delegate.updateStatus()
             for space in delegate.menuOrder where space != "1" {
                 let frame = delegate.workspaceFrames[space]!
-                for x in stride(from: frame.minX + 0.5, to: frame.maxX, by: 1) {
+                for x in stride(from: frame.minX + imageRect.minX + 0.5, to: frame.maxX + imageRect.minX, by: 1) {
                     precondition(delegate.navigationArguments(at: NSPoint(x: x, y: 11)) == ["workspace", space],
                                  "Part of an inactive workspace group did not select its workspace")
                 }

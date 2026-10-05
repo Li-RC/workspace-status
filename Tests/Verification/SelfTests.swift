@@ -27,19 +27,21 @@ func runSelfTests() throws {
     func strip(_ screen: NSRect = display, notch: Bool = false, menus: CGFloat = 480,
                status: CGFloat = 1120, width: CGFloat = 320) -> NSRect? {
         menuStripFrame(screen: screen, hasNotch: notch, native: saved, menuEnd: menus,
-                       statusStart: status, width: width, height: 24)
+                       statusStart: status, width: width, workspaceWidth: width - 24, height: 24)
     }
     precondition(strip(notch: true, menus: 1200) == saved, "Notched display lost its saved position")
-    precondition(strip() == NSRect(x: 560, y: 876, width: 320, height: 24), "A clear center was not used")
+    precondition(strip() == NSRect(x: 570, y: 876, width: 320, height: 24), "The workspace group was not centered independently of the bell")
+    precondition(strip(width: 100)?.minX == 680, "A compact workspace group was not centered")
     precondition(strip(menus: 600)?.minX == 608, "Long app menus should place the strip just after them")
     precondition(strip(menus: 400, status: 850)?.minX == 408, "Right-side icons overlapped a centered strip")
+    precondition(strip(menus: 400, status: 890)?.minX == 408, "Centering the workspaces left no room for the bell")
     precondition(strip(menus: 700, status: 900)?.width == 184, "A crowded bar overlapped other icons")
     precondition(strip(menus: 900, status: 900) == nil, "A strip was drawn without any available space")
     let offsetDisplay = NSRect(x: -1600, y: -400, width: 1600, height: 1000)
-    precondition(strip(offsetDisplay, menus: -1200, status: -300)?.midX == -800,
+    precondition(strip(offsetDisplay, menus: -1200, status: -300)?.minX == -950,
                  "A secondary display was centered using primary-display coordinates")
     precondition(menuStripFrame(screen: display, hasNotch: true, native: nil, menuEnd: 0,
-        statusStart: 1440, width: 320, height: 24) == nil, "A missing native slot invented a notched position")
+        statusStart: 1440, width: 320, workspaceWidth: 296, height: 24) == nil, "A missing native slot invented a notched position")
     print("PASS: saved notched position; non-notched centering, after-menus placement, crowded bars and display offsets.")
     let fixture = menuFixture()
     precondition(fixture.occupiedSpaces == ["1", "2", "10"])

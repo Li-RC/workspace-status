@@ -28,7 +28,7 @@ Built with **Swift, SwiftUI and AppKit**, it brings **Liquid Glass** controls to
 - **Workspace and app switching.** Click anywhere in an inactive workspace group to switch there. Click an app in the current workspace to focus it, or double-click an app to focus it from any workspace.
 - **Window browsing.** Expand a workspace in the dropdown to browse its open windows.
 - **Native appearance.** Uses Liquid Glass on macOS 26 and later.
-- **Display-aware placement.** Keeps the saved position on notched displays. On displays without a notch, centers the strip when space allows, or places it immediately after the application menus.
+- **Display-aware placement.** Keeps the saved position on notched displays. On displays without a notch, centers the workspace indicators when space allows, with the bell beside them, or places the group immediately after the application menus.
 - **Unread indicators.** An orange bell highlights apps with Dock badges. View those apps and their badge values under **Notifications**.
 - **Native settings.** Configure login startup, menu bar placement and Dock badge monitoring in a dedicated settings window.
 - **Local operation.** Runs without network services or changes to your AeroSpace configuration.
@@ -94,7 +94,7 @@ Settings follows system appearance. Closing its window or pressing **⌘W** keep
 
 ### Placement on multiple displays
 
-On a display **with a notch**, the strip stays at its existing menu bar position. On a display **without a notch**, it uses the center when the whole strip fits between application menus and status icons. Otherwise it appears just after the application menus, shrinking to fit the available gap when necessary. The dropdown opens beneath the bell on the display you clicked.
+On a display **with a notch**, the strip stays at its existing menu bar position. On a display **without a notch**, it centers the workspace indicators, including application icons, while keeping the bell beside them. The bell is excluded from the centering calculation, but space for the whole group is still reserved between application menus and status icons. When the centered group cannot fit, it appears just after the application menus, shrinking to fit the available gap when necessary. The dropdown opens beneath the bell on the display you clicked.
 
 Automatic placement requires Accessibility access to read menu bar positions. Without permission, or while those positions are unavailable, the normal macOS status item remains usable. If there is no gap at all, the positioned strip is hidden on that display until space becomes available. It follows menu bar visibility, including auto-hide and full-screen apps.
 

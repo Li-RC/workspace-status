@@ -32,11 +32,12 @@ func scheduleLivePlacementTest(delegate: AppDelegate, args: [String]) {
                 externalCount += 1
                 let statusStart = delegate.placement.statusStarts[id]!
                 let left = screen.frame.minX + delegate.placement.menuWidth + 8
-                let centered = screen.frame.midX - view.contentWidth / 2
+                let centered = screen.frame.midX - delegate.placement.workspaceWidth / 2 - MenuStripView.imageInset
                 let canCenter = centered >= left && centered + view.contentWidth <= statusStart - 8
                 if canCenter {
-                    precondition(abs(overlay.frame.midX - screen.frame.midX) <= 1,
-                                 "The external strip was not centered when there was room")
+                    let workspaceCenter = overlay.frame.minX + view.imageOriginX + delegate.placement.workspaceWidth * view.scale / 2
+                    precondition(abs(workspaceCenter - screen.frame.midX) <= 1,
+                                 "The external workspace group was not centered when there was room")
                     print("External placement: CENTER")
                 } else {
                     precondition(abs(overlay.frame.minX - (screen.frame.minX + delegate.placement.menuWidth + 8)) <= 1,
@@ -45,7 +46,7 @@ func scheduleLivePlacementTest(delegate: AppDelegate, args: [String]) {
                 }
                 precondition(overlay.frame.maxX <= statusStart - 7, "The strip overlapped another status icon")
             }
-            let point = NSPoint(x: overlay.frame.minX + view.contentOriginX + delegate.bellFrame.midX * view.scale, y: overlay.frame.midY)
+            let point = NSPoint(x: overlay.frame.minX + view.imageOriginX + delegate.bellFrame.midX * view.scale, y: overlay.frame.midY)
             delegate.clickMenuBar(at: point)
             precondition(delegate.panel.isPresented && screen.visibleFrame.contains(delegate.panel.frame),
                          "The live dropdown opened on the wrong display")
@@ -56,7 +57,7 @@ func scheduleLivePlacementTest(delegate: AppDelegate, args: [String]) {
         }
         precondition(externalCount > 0, "Connect a display without a notch for the live placement test")
         if long {
-            print("Live notched position, external centering, after-menu placement and per-display bell dropdowns: PASS")
+            print("Live workspace-only centering, available-space checks and per-display bell dropdowns: PASS")
             delegate.placement.stop(); delegate.workspaces.stop(); delegate.notifications.stop()
             exit(0)
         } else {

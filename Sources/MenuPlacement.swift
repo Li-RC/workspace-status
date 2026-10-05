@@ -2,12 +2,13 @@ import AppKit
 import ApplicationServices
 
 func menuStripFrame(screen: NSRect, hasNotch: Bool, native: NSRect?, menuEnd: CGFloat,
-                    statusStart: CGFloat, width: CGFloat, height: CGFloat) -> NSRect? {
+                    statusStart: CGFloat, width: CGFloat, workspaceWidth: CGFloat, height: CGFloat) -> NSRect? {
     if hasNotch { return native }
     let left = max(screen.minX, menuEnd + 8)
     let right = min(screen.maxX, statusStart - 8)
     guard width > 0, right > left else { return nil }
-    let centered = screen.midX - width / 2
+    // Center the drawn workspace group; still reserve space for the adjacent bell.
+    let centered = screen.midX - workspaceWidth / 2 - MenuStripView.imageInset
     let fitsCenter = centered >= left && centered + width <= right
     return NSRect(x: fitsCenter ? centered : left, y: screen.maxY - height,
                   width: fitsCenter ? width : min(width, right - left), height: height)
@@ -20,6 +21,7 @@ final class MenuPlacement: ObservableObject {
     @Published private(set) var notice: String?
     private(set) var usesOverlays = false
     private(set) var menuWidth: CGFloat = 0
+    var workspaceWidth: CGFloat = 0
     private(set) var statusStarts: [CGDirectDisplayID: CGFloat] = [:]
     private(set) var overlays: [CGDirectDisplayID: NSPanel] = [:]
     private weak var item: NSStatusItem?
@@ -111,7 +113,7 @@ final class MenuPlacement: ObservableObject {
             }
             if let frame = menuStripFrame(screen: bounds, hasNotch: screen.auxiliaryTopLeftArea != nil,
                 native: native, menuEnd: menuEnd, statusStart: statusStart ?? bounds.maxX,
-                width: item.length, height: bar.height) {
+                width: item.length, workspaceWidth: workspaceWidth, height: bar.height) {
                 if screen.auxiliaryTopLeftArea == nil || frame.minX >= menuEnd + 8 { frames[id] = frame }
             }
         }

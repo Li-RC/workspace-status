@@ -1,6 +1,7 @@
 import AppKit
 
 final class MenuStripView: NSView {
+    static let imageInset: CGFloat = 2
     var image: NSImage?
     var contentWidth: CGFloat = 1
     var click: ((NSPoint, TimeInterval) -> Void)?
@@ -9,10 +10,11 @@ final class MenuStripView: NSView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     var scale: CGFloat { min(1, bounds.width / max(1, contentWidth)) }
     var contentOriginX: CGFloat { (bounds.width - contentWidth * scale) / 2 }
+    var imageOriginX: CGFloat { contentOriginX + Self.imageInset * scale }
 
     override func draw(_ dirtyRect: NSRect) {
         guard let image, scale > 0 else { return }
-        image.draw(in: NSRect(x: contentOriginX + 2 * scale, y: (bounds.height - 22 * scale) / 2,
+        image.draw(in: NSRect(x: imageOriginX, y: (bounds.height - 22 * scale) / 2,
                               width: image.size.width * scale, height: 22 * scale),
                    from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
     }
@@ -29,7 +31,7 @@ final class MenuStripView: NSView {
 
     override func accessibilityPerformPress() -> Bool {
         guard let window, let click else { return false }
-        click(NSPoint(x: window.frame.minX + contentOriginX + (contentWidth - 12) * scale, y: window.frame.midY),
+        click(NSPoint(x: window.frame.minX + imageOriginX + (contentWidth - 12) * scale, y: window.frame.midY),
               ProcessInfo.processInfo.systemUptime)
         return true
     }

@@ -145,7 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func bellContextMenu(at point: NSPoint) -> NSMenu? {
-        guard let location = menuPoint(at: point), bellFrame.contains(location.point) else { return nil }
+        guard let location = menuPoint(at: point), bellFrame.contains(location) else { return nil }
         let menu = NSMenu()
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(showSettings(_:)), keyEquivalent: "")
         settingsItem.target = self
@@ -183,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             x += width
         }
         bellFrame = NSRect(x: x, y: 0, width: 24, height: 22)
+        placement.workspaceWidth = x
         let hasBadges = !notifications.badges.isEmpty
         let bell = NSImage(systemSymbolName: hasBadges ? "bell.badge.fill" : "bell", accessibilityDescription: nil)!
         let bellImage = hasBadges ? bell.withSymbolConfiguration(.init(paletteColors: [.systemOrange]))! : bell
@@ -226,28 +227,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func workspaceTarget(at point: NSPoint, padding: CGFloat? = nil) -> (space: String, bundle: String?)? {
-        guard let button = item.button,
-              let space = menuOrder.first(where: { workspaceFrames[$0]!.contains(point) }) else { return nil }
-        // App frames share the image's coordinates; the native button adds image padding.
-        let imagePoint = NSPoint(x: point.x - (padding ?? button.cell!.imageRect(forBounds: button.bounds).minX), y: 11)
+    private func workspaceTarget(at imagePoint: NSPoint) -> (space: String, bundle: String?)? {
+        guard let space = menuOrder.first(where: { workspaceFrames[$0]!.contains(imagePoint) }) else { return nil }
         let bundle = appFrames[space]?.first(where: { $0.value.contains(imagePoint) })?.key
         return (space, bundle)
     }
 
     func navigationArguments(at point: NSPoint) -> [String]? {
-        guard let target = workspaceTarget(at: point) else { return nil }
+        guard let button = item.button else { return nil }
+        let inset = button.cell!.imageRect(forBounds: button.bounds).minX
+        guard let target = workspaceTarget(at: NSPoint(x: point.x - inset, y: 11)) else { return nil }
         return workspaces.navigationArguments(to: target.space, appBundle: target.bundle)
     }
 
-    private func menuPoint(at screenPoint: NSPoint) -> (point: NSPoint, padding: CGFloat)? {
+    // Convert both renderers to the image coordinates used by every click target.
+    private func menuPoint(at screenPoint: NSPoint) -> NSPoint? {
         if let overlay = placement.overlay(at: screenPoint), let view = overlay.contentView as? MenuStripView, view.scale > 0 {
-            return (NSPoint(x: (screenPoint.x - overlay.frame.minX - view.contentOriginX) / view.scale, y: 11), 2)
+            return NSPoint(x: (screenPoint.x - overlay.frame.minX - view.imageOriginX) / view.scale, y: 11)
         }
         guard !placement.usesOverlays, let button = item.button, let window = button.window,
               window.frame.contains(screenPoint) else { return nil }
         let location = button.convert(window.convertPoint(fromScreen: screenPoint), from: nil)
-        return (NSPoint(x: location.x, y: button.bounds.midY), button.cell!.imageRect(forBounds: button.bounds).minX)
+        let inset = button.cell!.imageRect(forBounds: button.bounds).minX
+        return NSPoint(x: location.x - inset, y: 11)
     }
 
     func menuNavigation(at screenPoint: NSPoint, timestamp: TimeInterval) -> (workspaceClick: Bool, arguments: [String]?) {
@@ -260,7 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return (true, workspaces.navigationArguments(to: previous.space, appBundle: previous.bundle, focusApp: true))
         }
         guard let location = menuPoint(at: screenPoint),
-              let target = workspaceTarget(at: location.point, padding: location.padding) else { return (false, nil) }
+              let target = workspaceTarget(at: location) else { return (false, nil) }
         if let bundle = target.bundle { lastAppClick = (target.space, bundle, screenPoint, timestamp) }
         return (true, workspaces.navigationArguments(to: target.space, appBundle: target.bundle))
     }
@@ -284,10 +286,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let arguments = navigation.arguments { workspaces.perform(arguments, completion: {}) }
             return
         }
-        guard let location = menuPoint(at: screenPoint), bellFrame.contains(location.point) else { return }
+        guard let location = menuPoint(at: screenPoint), bellFrame.contains(location) else { return }
         if let overlay = placement.overlay(at: screenPoint), let screen = overlay.screen,
            let view = overlay.contentView as? MenuStripView {
-            overviewAnchor = (NSRect(x: overlay.frame.minX + view.contentOriginX + bellFrame.minX * view.scale,
+            overviewAnchor = (NSRect(x: overlay.frame.minX + view.imageOriginX + bellFrame.minX * view.scale,
                 y: overlay.frame.midY - 11 * view.scale, width: bellFrame.width * view.scale, height: 22 * view.scale), screen)
         } else { overviewAnchor = nil }
         toggle()
@@ -300,9 +302,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func dismissIfOutside(at point: NSPoint) {
         guard panel.isPresented, !panel.frame.contains(point) else { return }
-        if let location = menuPoint(at: point), bellFrame.contains(location.point) { return }
+        if let location = menuPoint(at: point), bellFrame.contains(location) { return }
         if let button = item.button, let window = button.window {
-            let bell = window.convertToScreen(button.convert(bellFrame, to: nil))
+            let inset = button.cell!.imageRect(forBounds: button.bounds).minX
+            let bell = window.convertToScreen(button.convert(bellFrame.offsetBy(dx: inset, dy: 0), to: nil))
             if point.y >= window.frame.minY, point.y <= window.frame.maxY,
                point.x >= bell.minX, point.x <= bell.maxX { return }
         }
@@ -328,7 +331,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func popupAnchor() -> (NSRect, NSScreen)? {
         if let overviewAnchor { return (overviewAnchor.rect, overviewAnchor.screen) }
         guard let button = item.button, let window = button.window, let screen = window.screen else { return nil }
-        return (window.convertToScreen(button.convert(bellFrame, to: nil)), screen)
+        let inset = button.cell!.imageRect(forBounds: button.bounds).minX
+        return (window.convertToScreen(button.convert(bellFrame.offsetBy(dx: inset, dy: 0), to: nil)), screen)
     }
 
     private func fitOverview(visibleFrame: NSRect, anchor: NSRect) {
