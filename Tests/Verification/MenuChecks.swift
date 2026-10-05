@@ -57,12 +57,12 @@ func runPlacementTest() {
         delegate.workspaces.snapshot = Snapshot(spaces: fixture.spaces, current: "1", windows: fixture.windows)
         delegate.updateStatus()
         let item = delegate.item!
-        let button = item.button!, native = button.window!
-        let screen = native.screen!
+        let screen = NSScreen.screens.first!
         let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! CGDirectDisplayID
-        let nativeFrame = native.convertToScreen(button.convert(button.bounds, to: nil))
-        let height = native.frame.height
-        let requestedFrame = NSRect(x: nativeFrame.minX, y: screen.frame.maxY - height, width: item.length * 0.75, height: height)
+        // The overlay fixture does not depend on the native menu host finishing its asynchronous layout.
+        let height = max(22, screen.frame.maxY - screen.visibleFrame.maxY)
+        let requestedFrame = NSRect(x: screen.frame.midX - item.length * 0.75 / 2, y: screen.frame.maxY - height,
+                                    width: item.length * 0.75, height: height)
         // Install the real renderer and click callback without starting live geometry polling.
         delegate.placement.start(item: item, image: { delegate.statusImage },
             click: { point, time in delegate.clickMenuBar(at: point, timestamp: time) })
@@ -169,11 +169,32 @@ func runPlacementTest() {
         delegate.settings.compactViewEnabled = false
         defaults.removePersistentDomain(forName: suite)
         print("Workspace-only centering and exact workspace/app edges in full, compact and scaled strips: PASS")
-        delegate.placement.stop()
-        precondition(item.isVisible && !delegate.placement.usesOverlays && !overlay.isVisible)
-        precondition(item.button?.image === delegate.statusImage, "Stopping placement did not restore the native strip")
-        print("Positioned strip rendering, scaled clicks, app focus, double click, bell toggle, popup anchoring and native restoration: PASS")
-        exit(0)
+        let hitFrame = menuStripFrame(screen: screen.frame, hasNotch: false, native: nil,
+            menuEnd: screen.frame.minX + 40, statusStart: screen.frame.maxX,
+            width: item.length, workspaceWidth: delegate.bellFrame.minX, height: height)!
+        delegate.placement.display(frames: [id: hitFrame], reserveNativeSlot: false)
+        // Directly delivering NSEvents bypasses WindowServer's transparent-pixel hit testing.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            let visible = overlay.frame
+            for x in stride(from: visible.minX + 1, to: visible.maxX - 1, by: 3) {
+                for y in [visible.minY + 1, visible.midY, visible.maxY - 1] {
+                    let point = NSPoint(x: x, y: y)
+                    let hit = NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: 0)
+                    guard hit == overlay.windowNumber else {
+                        print("FAIL: transparent strip point \(point) hits window \(hit) instead of \(overlay.windowNumber)")
+                        exit(1)
+                    }
+                }
+            }
+            precondition(overlay.backgroundColor == .clear && !overlay.isOpaque && !overlay.hasShadow,
+                         "Accepting transparent clicks changed the strip appearance")
+            print("WindowServer receives clicks across transparent numbers, bell interiors and padding: PASS")
+            delegate.placement.stop()
+            precondition(item.isVisible && !delegate.placement.usesOverlays && !overlay.isVisible)
+            precondition(item.button?.image === delegate.statusImage, "Stopping placement did not restore the native strip")
+            print("Positioned strip rendering, scaled clicks, app focus, double click, bell toggle, popup anchoring and native restoration: PASS")
+            exit(0)
+        }
     }
     application.run()
 }

@@ -138,6 +138,8 @@ final class MenuPlacement: ObservableObject {
             else {
                 overlay = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
                 overlay.isOpaque = false; overlay.backgroundColor = .clear; overlay.hasShadow = false
+                // Explicitly accept clear pixels; the default lets WindowServer pass those clicks through.
+                overlay.ignoresMouseEvents = false
                 overlay.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
                 overlay.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
                 overlay.hidesOnDeactivate = false
