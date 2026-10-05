@@ -43,15 +43,17 @@ try:
         "open", "-n", "-o", str(folder / "host.log"), "--stderr", str(folder / "host-error.log"),
         str(app), "--args", str(command),
     ], check=True)
-    result = subprocess.run([
-        str(project / "dist/Workspace Status.app/Contents/MacOS/WorkspaceStatus"),
-        "--placement-live-test", "--menu-command", str(command),
-    ], capture_output=True, text=True, timeout=25)
-    (folder / "live.log").write_text(result.stdout)
-    (folder / "live-error.log").write_text(result.stderr)
-    print(result.stdout)
-    print(result.stderr)
-    if result.returncode != 0 or "per-display bell dropdowns: PASS" not in result.stdout:
+    # Launch Services supplies native menu geometry; the argument override leaves saved preferences intact.
+    subprocess.run([
+        "open", "-n", "-W", "-o", str(folder / "live.log"), "--stderr", str(folder / "live-error.log"),
+        str(project / "dist/Workspace Status.app"), "--args",
+        "--placement-live-test", "--menu-command", str(command), "-menuBarPosition", "automatic",
+    ], check=True, timeout=25)
+    output = (folder / "live.log").read_text()
+    errors = (folder / "live-error.log").read_text()
+    print(output)
+    print(errors)
+    if "per-display bell dropdowns: PASS" not in output or "FAIL:" in output or "failed" in errors.lower():
         raise SystemExit("Live placement check failed; inspect the logs above.")
 finally:
     command.write_text("quit")
