@@ -1,6 +1,19 @@
 import AppKit
 
 enum AeroSpace {
+    static let bundleIdentifier = "bobko.aerospace"
+
+    static var applicationURL: URL? {
+        let workspace = NSWorkspace.shared
+        let candidates = [
+            NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first?.bundleURL,
+            workspace.urlForApplication(withBundleIdentifier: bundleIdentifier),
+            URL(fileURLWithPath: "/Applications/AeroSpace.app"),
+            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications/AeroSpace.app")
+        ]
+        return candidates.compactMap { $0 }.first { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
     static var executable: String? {
         ["/opt/homebrew/bin/aerospace", "/usr/local/bin/aerospace",
          "/Applications/AeroSpace.app/Contents/MacOS/aerospace"]

@@ -48,6 +48,8 @@ Built with **Swift, SwiftUI and AppKit**, it brings **Liquid Glass** controls to
 2. For a DMG, drag **Workspace Status.app** into **Applications**. For a ZIP, extract it and move the app into **Applications**.
 3. Start AeroSpace, then open **Workspace Status**.
 
+Workspace Status checks for AeroSpace when launched or reopened. If it is missing, **Install AeroSpace…** opens the [official installation guide](https://nikitabobko.github.io/AeroSpace/guide#installation). If it is installed but not running, **Open AeroSpace** starts it and refreshes the workspaces. **Not Now** leaves Workspace Status running so you can set up AeroSpace later.
+
 The app runs in the menu bar without a Dock icon. To start it at login, enable **Launch at login** in the app's Settings. If macOS requires approval, Settings provides a button to open Login Items.
 
 This README describes the current source on `main`. Check the release notes for features included in a downloaded version.

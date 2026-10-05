@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var localClickMonitor: Any?
     private var hosting: NSHostingController<Overview>!
     private var lastAppClick: (space: String, bundle: String, point: NSPoint, timestamp: TimeInterval)?
+    var aeroSpacePromptVisible = false
 
     init(settings: SettingsStore = SettingsStore()) {
         self.settings = settings
@@ -98,6 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             placement.start(item: item, image: { [weak self] in self?.statusImage },
                 click: { [weak self] point, time in self?.clickMenuBar(at: point, timestamp: time) },
                 contextClick: { [weak self] point in self?.showBellContextMenu(at: point) })
+            // Fixture checks skip this; normal startup and live checks use the installed dependency.
+            DispatchQueue.main.async { [weak self] in self?.promptForAeroSpaceIfNeeded() }
         }
     }
 
@@ -138,7 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        showSettings(nil)
+        if !promptForAeroSpaceIfNeeded() { showSettings(nil) }
         return false
     }
 

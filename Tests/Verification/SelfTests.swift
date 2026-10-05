@@ -4,6 +4,7 @@ import ApplicationServices
 
 func runSelfTests() throws {
     runSettingsStoreTests()
+    runAeroSpaceStartupTests()
     let json = #"[{"window-id":42,"app-name":"Editor","app-bundle-id":"test.editor","window-title":"quote \" newline\n $(echo no)","workspace":"dev space"}]"#
     let windows = try JSONDecoder().decode([AppWindow].self, from: Data(json.utf8))
     precondition(windows[0].id == 42 && windows[0].workspace == "dev space")
