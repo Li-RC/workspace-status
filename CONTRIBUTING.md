@@ -92,6 +92,6 @@ Use `--settings-test --render-settings-preview <file>` for a settings window pre
 | `Tests/MenuFixture.swift` | Native menu host for hardware placement checks |
 | `Tests/check-placement-live.py` | Live check runner, log capture and restoration of installed apps |
 | `build.sh` | Local compilation and signing |
-| [`Design/AppIcon/`](Design/AppIcon/) | Editable Icon Composer project, SVG layers, and appearance previews |
+| [`Design/AppIcon/`](Design/AppIcon/) | Editable Icon Composer project with embedded SVG layers, and appearance previews |
 
 `build.sh` compiles `Sources/*.swift` and `Tests/Verification/*.swift` into the app so the verification flags above remain available. `Tests/MenuFixture.swift` is a separate executable compiled by the live placement runner.

@@ -4,13 +4,12 @@ Open `WorkspaceStatus.icon` in Apple's Icon Composer. This is the editable const
 
 ## Construction
 
-- `layers/01-workspaces.svg`: three neutral workspace tiles.
-- `layers/02-selected-workspace.svg`: the blue selected tile.
-- `layers/03-window-detail.svg`: the white window layout symbol.
-- `WorkspaceStatus.icon/Assets/`: embedded copies of the original vector layers.
+- `WorkspaceStatus.icon/Assets/01-workspaces.svg`: three neutral workspace tiles.
+- `WorkspaceStatus.icon/Assets/02-selected-workspace.svg`: the blue selected tile.
+- `WorkspaceStatus.icon/Assets/03-window-detail.svg`: the white window layout symbol.
 - `WorkspaceStatus.icon/icon.json`: background gradient, layer ordering, and native glass settings.
 
-All artwork uses the same 1024 × 1024 canvas, with no baked shadows, blur, or highlights. Edit shapes in the SVG files and replace the corresponding layers in Icon Composer. Keep the files in `layers/` and the embedded copies in sync. Icon Composer groups are ordered front to back: the window detail sits above the workspace tiles.
+All artwork uses the same 1024 × 1024 canvas, with no baked shadows, blur, or highlights. The SVG files inside `WorkspaceStatus.icon/Assets/` are the source artwork. Close Icon Composer before editing them, then reopen the document to load the changes. Icon Composer groups are ordered front to back: the window detail sits above the workspace tiles.
 
 ## Previews
 
