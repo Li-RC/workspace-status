@@ -16,7 +16,7 @@ xcrun actool "$project_dir/Design/AppIcon/WorkspaceStatus.icon" \
   --target-device mac --app-icon WorkspaceStatus --standalone-icon-behavior all \
   --output-partial-info-plist "$build_cache/icon-info.plist" --output-format human-readable-text
 xcrun swiftc -swift-version 5 -O -module-cache-path "$build_cache" -target "$(uname -m)-apple-macosx14.0" \
-  "$project_dir"/Sources/*.swift "$project_dir"/Tests/Verification/*.swift \
+  "$project_dir"/Sources/*.swift "$project_dir"/Sources/*/*.swift "$project_dir"/Tests/Verification/*.swift \
   -o "$app_dir/Contents/MacOS/WorkspaceStatus"
 cat > "$app_dir/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

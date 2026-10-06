@@ -73,25 +73,26 @@ Use `--settings-test --render-settings-preview <file>` for a settings window pre
 | --- | --- |
 | `Sources/main.swift` | Command dispatch, duplicate-instance guard and app startup |
 | `Sources/App.swift` | App lifecycle, grouped menu bar item and click routing |
-| `Sources/SettingsStore.swift` | Persisted menu placement and notification preferences |
-| `Sources/SettingsView.swift` | Native General, Menu Bar, Notifications and About controls |
-| `Sources/SettingsWindowController.swift` | Single settings window, activation and display fitting |
-| `Sources/LoginItemModel.swift` | System login registration status, changes and errors |
-| `Sources/WorkspaceData.swift` | Decoded workspace/window data and snapshot ordering |
-| `Sources/AeroSpace.swift` | AeroSpace commands, event subscription and workspace state |
+| `Sources/Settings/SettingsStore.swift` | Persisted menu placement and notification preferences |
+| `Sources/Settings/SettingsView.swift` | Native General, Menu Bar, Notifications and About controls |
+| `Sources/Settings/SettingsWindowController.swift` | Single settings window, activation and display fitting |
+| `Sources/Settings/LoginItemModel.swift` | System login registration status, changes and errors |
+| `Sources/Workspaces/WorkspaceData.swift` | Decoded workspace/window data and snapshot ordering |
+| `Sources/Workspaces/AeroSpace.swift` | AeroSpace commands, event subscription and workspace state |
+| `Sources/Workspaces/AeroSpaceStartup.swift` | Dependency detection and install/open prompts |
 | `Sources/Notifications.swift` | Dock badge monitoring through Accessibility |
 | `Sources/Accessibility.swift` | Shared Accessibility attribute and child lookup helpers |
 | `Sources/AppIcons.swift` | Application icons, workspace badges and icon strips |
-| `Sources/WorkspaceAppButton.swift` | Dropdown app buttons and single/double click handling |
-| `Sources/Overview.swift` | SwiftUI dropdown, expansion state and native glass styling |
-| `Sources/OverviewPanel.swift` | Dropdown panel sizing and appearance/dismissal animation |
-| `Sources/MenuPlacement.swift` | Display-aware placement and positioned panel lifecycle |
-| `Sources/MenuGeometry.swift` | System menu bar and status item geometry |
-| `Sources/MenuStripView.swift` | Positioned strip drawing and input coordinates |
+| `Sources/Overview/WorkspaceAppButton.swift` | Dropdown app buttons and single/double click handling |
+| `Sources/Overview/Overview.swift` | SwiftUI dropdown, expansion state and native glass styling |
+| `Sources/Overview/OverviewPanel.swift` | Dropdown panel sizing and appearance/dismissal animation |
+| `Sources/MenuBar/MenuPlacement.swift` | Display-aware placement and positioned panel lifecycle |
+| `Sources/MenuBar/MenuGeometry.swift` | System menu bar and status item geometry |
+| `Sources/MenuBar/MenuStripView.swift` | Positioned strip drawing and input coordinates |
 | `Tests/Verification/` | In-app checks, diagnostics, previews and shared fixtures |
 | `Tests/MenuFixture.swift` | Native menu host for hardware placement checks |
 | `Tests/check-placement-live.py` | Live check runner, log capture and restoration of installed apps |
 | `build.sh` | Local compilation and signing |
 | [`Design/AppIcon/`](Design/AppIcon/) | Editable Icon Composer project with embedded SVG layers, and appearance previews |
 
-`build.sh` compiles `Sources/*.swift` and `Tests/Verification/*.swift` into the app so the verification flags above remain available. `Tests/MenuFixture.swift` is a separate executable compiled by the live placement runner.
+`build.sh` compiles `Sources/*.swift`, `Sources/*/*.swift` and `Tests/Verification/*.swift` into the app so the verification flags above remain available. `Tests/MenuFixture.swift` is a separate executable compiled by the live placement runner.
