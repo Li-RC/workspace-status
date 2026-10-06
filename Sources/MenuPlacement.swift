@@ -141,7 +141,7 @@ final class MenuPlacement: ObservableObject {
                 // Explicitly accept clear pixels; the default lets WindowServer pass those clicks through.
                 overlay.ignoresMouseEvents = false
                 overlay.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
-                overlay.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+                overlay.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
                 overlay.hidesOnDeactivate = false
                 overlay.isReleasedWhenClosed = false
                 let view = MenuStripView(frame: NSRect(origin: .zero, size: frame.size))

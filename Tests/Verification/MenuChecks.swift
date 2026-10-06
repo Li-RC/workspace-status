@@ -202,28 +202,37 @@ func runPlacementTest() {
         print("Dropdown midpoint follows centered workspaces or the bell, with screen-edge limits: PASS")
         defaults.removePersistentDomain(forName: suite)
         print("Workspace-only centering and exact workspace/app edges in full, compact and scaled strips: PASS")
+        delegate.placement.display(frames: [:], reserveNativeSlot: true)
+        precondition(!overlay.isVisible && delegate.placement.overlay(at: NSPoint(x: frame.midX, y: frame.midY)) == nil,
+                     "A hidden menu bar left a visible or clickable positioned strip")
+        precondition(item.isVisible && delegate.placement.usesOverlays,
+                     "Hiding the menu bar lost the reserved native slot or automatic placement")
         let hitFrame = menuStripFrame(screen: screen.frame, hasNotch: false, native: nil,
             menuEnd: screen.frame.minX + 40, statusStart: screen.frame.maxX,
             width: item.length, workspaceWidth: delegate.bellFrame.minX, height: height)!
         delegate.placement.display(frames: [id: hitFrame], reserveNativeSlot: false)
+        let restoredOverlay = delegate.placement.overlays[id]!
+        precondition(restoredOverlay.isVisible && !item.isVisible,
+                     "The positioned strip did not return when the menu bar reappeared")
+        print("Hidden menu bar removes the positioned strip and restores it on return: PASS")
         // Directly delivering NSEvents bypasses WindowServer's transparent-pixel hit testing.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            let visible = overlay.frame
+            let visible = restoredOverlay.frame
             for x in stride(from: visible.minX + 1, to: visible.maxX - 1, by: 3) {
                 for y in [visible.minY + 1, visible.midY, visible.maxY - 1] {
                     let point = NSPoint(x: x, y: y)
                     let hit = NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: 0)
-                    guard hit == overlay.windowNumber else {
-                        print("FAIL: transparent strip point \(point) hits window \(hit) instead of \(overlay.windowNumber)")
+                    guard hit == restoredOverlay.windowNumber else {
+                        print("FAIL: transparent strip point \(point) hits window \(hit) instead of \(restoredOverlay.windowNumber)")
                         exit(1)
                     }
                 }
             }
-            precondition(overlay.backgroundColor == .clear && !overlay.isOpaque && !overlay.hasShadow,
+            precondition(restoredOverlay.backgroundColor == .clear && !restoredOverlay.isOpaque && !restoredOverlay.hasShadow,
                          "Accepting transparent clicks changed the strip appearance")
             print("WindowServer receives clicks across transparent numbers, bell interiors and padding: PASS")
             delegate.placement.stop()
-            precondition(item.isVisible && !delegate.placement.usesOverlays && !overlay.isVisible)
+            precondition(item.isVisible && !delegate.placement.usesOverlays && !restoredOverlay.isVisible)
             precondition(item.button?.image === delegate.statusImage, "Stopping placement did not restore the native strip")
             print("Positioned strip rendering, scaled clicks, app focus, double click, bell toggle, popup anchoring and native restoration: PASS")
             exit(0)
