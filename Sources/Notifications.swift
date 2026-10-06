@@ -78,7 +78,8 @@ final class NotificationModel: ObservableObject {
                 AXUIElementSetMessagingTimeout(root, 0.25)
                 var visited = 0
                 self.walk(root, depth: 0, visited: &visited) { element in
-                    guard let badge = axValue(element, "AXStatusLabel") as? String, !badge.isEmpty,
+                    guard axValue(element, kAXSubroleAttribute) as? String == "AXApplicationDockItem",
+                          let badge = axValue(element, "AXStatusLabel") as? String, !badge.isEmpty,
                           let name = axValue(element, kAXTitleAttribute) as? String,
                           let bundle = names[name] else { return }
                     badges.append(DockBadge(name: name, bundle: bundle, value: badge))
