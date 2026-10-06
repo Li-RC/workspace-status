@@ -200,7 +200,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let frame = frames[space]!
                 let current = space == snapshot.current
                 let badge = workspaceBadge(current && self?.workspaces.error != nil ? "!" : space, selected: current)
-                (button.cell as! NSButtonCell).drawImage(badge, withFrame: NSRect(origin: frame.origin, size: badge.size), in: button)
+                if self?.placement.usesOverlays == true {
+                    menuBarSymbol(badge).draw(in: NSRect(origin: frame.origin, size: badge.size),
+                        from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+                } else {
+                    (button.cell as! NSButtonCell).drawImage(badge, withFrame: NSRect(origin: frame.origin, size: badge.size), in: button)
+                }
                 let bundles = compact ? [] : snapshot.appBundles(in: space)
                 if !bundles.isEmpty {
                     let icons = iconStrip(bundles)
@@ -209,9 +214,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             let size = bellImage.size
-            (button.cell as! NSButtonCell).drawImage(bellImage,
-                withFrame: NSRect(x: bellRect.midX - size.width / 2 - 2, y: (22 - size.height) / 2,
-                                  width: size.width, height: size.height), in: button)
+            let frame = NSRect(x: bellRect.midX - size.width / 2 - 2, y: (22 - size.height) / 2,
+                               width: size.width, height: size.height)
+            if self?.placement.usesOverlays == true {
+                menuBarSymbol(bellImage).draw(in: frame,
+                    from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+            } else {
+                (button.cell as! NSButtonCell).drawImage(bellImage, withFrame: frame, in: button)
+            }
             return true
         }
         if let statusImage {

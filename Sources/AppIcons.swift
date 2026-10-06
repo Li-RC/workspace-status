@@ -42,6 +42,16 @@ func workspaceBadge(_ label: String, selected: Bool = true) -> NSImage {
     return image
 }
 
+func menuBarSymbol(_ image: NSImage) -> NSImage {
+    guard image.isTemplate else { return image }
+    return NSImage(size: image.size, flipped: false) { bounds in
+        image.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+        NSColor.white.setFill()
+        bounds.fill(using: .sourceIn)
+        return true
+    }
+}
+
 func iconStrip(_ bundles: [String]) -> NSImage {
     let width = CGFloat(bundles.count * 21 + 4)
     return NSImage(size: NSSize(width: width, height: 22), flipped: false) { _ in
