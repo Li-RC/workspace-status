@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let overviewState = OverviewState()
     let placement = MenuPlacement()
     private(set) var statusImage: NSImage?
-    private var overviewAnchor: (rect: NSRect, screen: NSScreen)?
+    private var overviewAnchor: (rect: NSRect, screen: NSScreen, centerX: CGFloat)?
     private(set) var naturalHeight: CGFloat = 240
     var item: NSStatusItem!
     private(set) var workspaceFrames: [String: NSRect] = [:]
@@ -75,12 +75,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         container.addChild(hosting)
         let backdrop = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 560))
         backdrop.addSubview(hosting.view)
+        hosting.view.clipsToBounds = false
         hosting.view.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            hosting.view.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
-            hosting.view.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
-            hosting.view.topAnchor.constraint(equalTo: backdrop.topAnchor),
-            hosting.view.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor)
+            hosting.view.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor, constant: overviewShadowMargin),
+            hosting.view.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor, constant: -overviewShadowMargin),
+            hosting.view.topAnchor.constraint(equalTo: backdrop.topAnchor, constant: overviewTopMargin),
+            hosting.view.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor, constant: -overviewShadowMargin)
         ])
         container.view = backdrop
         panel.contentViewController = container
@@ -302,8 +303,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let location = menuPoint(at: screenPoint), bellFrame.contains(location) else { return }
         if let overlay = placement.overlay(at: screenPoint), let screen = overlay.screen,
            let view = overlay.contentView as? MenuStripView {
-            overviewAnchor = (NSRect(x: overlay.frame.minX + view.imageOriginX + bellFrame.minX * view.scale,
-                y: overlay.frame.midY - 11 * view.scale, width: bellFrame.width * view.scale, height: 22 * view.scale), screen)
+            let bell = NSRect(x: overlay.frame.minX + view.imageOriginX + bellFrame.minX * view.scale,
+                y: overlay.frame.midY - 11 * view.scale, width: bellFrame.width * view.scale, height: 22 * view.scale)
+            let workspaceCenter = overlay.frame.minX + view.imageOriginX + bellFrame.minX * view.scale / 2
+            let centerX = abs(workspaceCenter - screen.frame.midX) < 1 ? screen.frame.midX : bell.midX
+            overviewAnchor = (bell, screen, centerX)
         } else { overviewAnchor = nil }
         toggle()
     }
@@ -314,7 +318,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func dismissIfOutside(at point: NSPoint) {
-        guard panel.isPresented, !panel.frame.contains(point) else { return }
+        guard panel.isPresented else { return }
+        let contentFrame = panel.convertToScreen(hosting.view.convert(hosting.view.bounds, to: nil))
+        guard !contentFrame.contains(point) else { return }
         if let location = menuPoint(at: point), bellFrame.contains(location) { return }
         if let button = item.button, let window = button.window {
             let inset = button.cell!.imageRect(forBounds: button.bounds).minX
@@ -327,9 +333,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showOverview() {
         if panel.isPresented { panel.dismiss(); return }
-        guard let (anchor, screen) = popupAnchor() else { return }
-        hosting.rootView.width = max(1, min(360, screen.visibleFrame.width - 28))
-        fitOverview(visibleFrame: screen.visibleFrame, anchor: anchor)
+        guard let (anchor, screen, centerX) = popupAnchor() else { return }
+        hosting.rootView.width = max(1, min(360, screen.visibleFrame.width - 2 * overviewShadowMargin - 28))
+        fitOverview(visibleFrame: screen.visibleFrame, anchor: anchor, centerX: centerX)
         if !["--layout-test", "--placement-test", "--settings-test"].contains(where: { CommandLine.arguments.contains($0) }) { workspaces.refresh() }
         panel.present()
     }
@@ -337,25 +343,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func resizeOverview(to height: CGFloat) {
         guard height > 0, abs(naturalHeight - height) > 0.5 else { return }
         naturalHeight = height
-        guard panel.isPresented, let (anchor, screen) = popupAnchor() else { return }
-        fitOverview(visibleFrame: screen.visibleFrame, anchor: anchor)
+        guard panel.isPresented, let (anchor, screen, centerX) = popupAnchor() else { return }
+        fitOverview(visibleFrame: screen.visibleFrame, anchor: anchor, centerX: centerX)
     }
 
-    private func popupAnchor() -> (NSRect, NSScreen)? {
-        if let overviewAnchor { return (overviewAnchor.rect, overviewAnchor.screen) }
+    private func popupAnchor() -> (NSRect, NSScreen, CGFloat)? {
+        if let overviewAnchor { return (overviewAnchor.rect, overviewAnchor.screen, overviewAnchor.centerX) }
         guard let button = item.button, let window = button.window, let screen = window.screen else { return nil }
         let inset = button.cell!.imageRect(forBounds: button.bounds).minX
-        return (window.convertToScreen(button.convert(bellFrame.offsetBy(dx: inset, dy: 0), to: nil)), screen)
+        let bell = window.convertToScreen(button.convert(bellFrame.offsetBy(dx: inset, dy: 0), to: nil))
+        return (bell, screen, bell.midX)
     }
 
-    private func fitOverview(visibleFrame: NSRect, anchor: NSRect) {
+    private func fitOverview(visibleFrame: NSRect, anchor: NSRect, centerX: CGFloat) {
         let size = overviewSize(visibleFrame: visibleFrame, anchor: anchor, contentHeight: naturalHeight)
         hosting.rootView.canvasHeight = naturalHeight
         hosting.rootView.scale = size.height / naturalHeight
         let top = min(anchor.minY - 8, visibleFrame.maxY - 8)
-        let origin = NSPoint(x: max(visibleFrame.minX, min(anchor.maxX - size.width, visibleFrame.maxX - size.width)),
-                             y: top - size.height)
-        panel.setFrame(NSRect(origin: origin, size: size), display: true)
+        let panelSize = NSSize(width: size.width + 2 * overviewShadowMargin,
+                              height: size.height + overviewTopMargin + overviewShadowMargin)
+        let origin = NSPoint(x: max(visibleFrame.minX,
+            min(centerX - panelSize.width / 2, visibleFrame.maxX - panelSize.width)),
+            y: top - size.height - overviewShadowMargin)
+        panel.setFrame(NSRect(origin: origin, size: panelSize), display: true)
         panel.contentView?.layoutSubtreeIfNeeded()
     }
 

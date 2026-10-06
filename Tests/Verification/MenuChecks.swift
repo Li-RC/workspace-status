@@ -107,10 +107,21 @@ func runPlacementTest() {
         let bell = point(delegate.bellFrame.midX)
         delegate.clickMenuBar(at: bell)
         precondition(delegate.panel.isPresented, "A positioned bell could not open the dropdown")
-        precondition(delegate.panel.frame.maxY <= frame.midY - 11 * view.scale && screen.visibleFrame.contains(delegate.panel.frame),
+        let dropdownContent = delegate.panel.convertToScreen(delegate.panel.contentView!.subviews.first!.convert(
+            delegate.panel.contentView!.subviews.first!.bounds, to: nil))
+        precondition(dropdownContent.maxY <= frame.midY - 11 * view.scale && screen.visibleFrame.contains(delegate.panel.frame),
                      "The positioned bell anchored the dropdown to the wrong screen")
+        let bellCenter = frame.minX + view.imageOriginX + delegate.bellFrame.midX * view.scale
+        precondition(abs(dropdownContent.midX - bellCenter) < 1,
+                     "An off-center strip did not center the dropdown under its bell")
         delegate.dismissIfOutside(at: point(delegate.bellFrame.midX, frame.maxY - 1))
         precondition(delegate.panel.isPresented, "The positioned bell was treated as an outside click")
+        precondition(!delegate.panel.hasShadow, "Shadow margins introduced an extra window shadow")
+        delegate.dismissIfOutside(at: NSPoint(x: delegate.panel.frame.minX + overviewShadowMargin / 2,
+                                              y: delegate.panel.frame.midY))
+        precondition(!delegate.panel.isPresented, "The transparent shadow margin swallowed an outside click")
+        delegate.clickMenuBar(at: bell)
+        precondition(delegate.panel.isPresented, "The dropdown did not reopen after a shadow-margin click")
         let eventPoint = overlay.convertPoint(fromScreen: bell)
         let event = NSEvent.mouseEvent(with: .leftMouseDown, location: eventPoint, modifierFlags: [],
             timestamp: 60, windowNumber: overlay.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
@@ -161,12 +172,34 @@ func runPlacementTest() {
                     }
                 }
                 let bell = drawnPoint(delegate.bellFrame.midX, placed.midY)
+                delegate.clickMenuBar(at: bell)
+                let centerX = factor == 1 ? screen.frame.midX : bell.x
+                precondition(delegate.panel.isPresented && abs(delegate.panel.frame.midX - centerX) < 1,
+                             "The dropdown did not follow the centered workspace group or off-center bell")
+                delegate.panel.dismiss()
                 precondition(delegate.bellContextMenu(at: bell) != nil)
                 precondition(delegate.bellContextMenu(at: drawnPoint(delegate.bellFrame.minX - 0.25, placed.midY)) == nil,
                              "The bell context menu overlaps a drawn workspace")
             }
         }
         delegate.settings.compactViewEnabled = false
+        for x in [screen.visibleFrame.minX, screen.frame.midX - item.length / 2 + 80,
+                  screen.visibleFrame.maxX - item.length] {
+            let requested = NSRect(x: x, y: screen.frame.maxY - height, width: item.length, height: height)
+            delegate.placement.display(frames: [id: requested], reserveNativeSlot: false)
+            let placed = overlay.frame
+            let bell = NSPoint(x: placed.minX + view.imageOriginX + delegate.bellFrame.midX * view.scale,
+                               y: placed.midY)
+            delegate.clickMenuBar(at: bell)
+            let halfWidth = delegate.panel.frame.width / 2
+            let expectedCenter = max(screen.visibleFrame.minX + halfWidth,
+                                     min(bell.x, screen.visibleFrame.maxX - halfWidth))
+            precondition(delegate.panel.isPresented && abs(delegate.panel.frame.midX - expectedCenter) < 1
+                && screen.visibleFrame.contains(delegate.panel.frame),
+                "An off-center dropdown did not align with its bell or stay within the screen")
+            delegate.panel.dismiss()
+        }
+        print("Dropdown midpoint follows centered workspaces or the bell, with screen-edge limits: PASS")
         defaults.removePersistentDomain(forName: suite)
         print("Workspace-only centering and exact workspace/app edges in full, compact and scaled strips: PASS")
         let hitFrame = menuStripFrame(screen: screen.frame, hasNotch: false, native: nil,

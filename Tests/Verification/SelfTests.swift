@@ -18,6 +18,9 @@ func runSelfTests() throws {
     let shortScreen = NSRect(x: 0, y: 40, width: 800, height: 500)
     let shortSize = overviewSize(visibleFrame: shortScreen, anchor: NSRect(x: 600, y: 540, width: 100, height: 24))
     precondition(shortSize.width + 28 <= shortScreen.width && shortSize.height + 28 <= shortScreen.height)
+    precondition(shortSize.width + 2 * overviewShadowMargin <= shortScreen.width
+        && shortSize.height + overviewTopMargin + overviewShadowMargin <= shortScreen.height,
+        "Native shadow margins do not fit the screen")
     let secondaryScreen = NSRect(x: -500, y: -700, width: 400, height: 600)
     let secondarySize = overviewSize(visibleFrame: secondaryScreen, anchor: NSRect(x: -200, y: -100, width: 80, height: 24))
     precondition(secondarySize.width + 28 <= secondaryScreen.width && secondarySize.height + 28 <= secondaryScreen.height)

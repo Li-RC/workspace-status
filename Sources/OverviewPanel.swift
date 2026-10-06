@@ -1,9 +1,12 @@
 import AppKit
 import QuartzCore
 
+let overviewShadowMargin: CGFloat = 32
+let overviewTopMargin: CGFloat = 8
+
 func overviewSize(visibleFrame: NSRect, anchor: NSRect, contentHeight: CGFloat = 240) -> NSSize {
-    let width = max(1, min(360, visibleFrame.width - 28))
-    let availableHeight = max(1, min(anchor.minY, visibleFrame.maxY) - visibleFrame.minY - 28)
+    let width = max(1, min(360, visibleFrame.width - 2 * overviewShadowMargin - 28))
+    let availableHeight = max(1, min(anchor.minY, visibleFrame.maxY) - visibleFrame.minY - overviewShadowMargin - 16)
     let scale = min(1, availableHeight / max(1, contentHeight))
     return NSSize(width: floor(width * scale), height: max(1, floor(contentHeight * scale)))
 }
