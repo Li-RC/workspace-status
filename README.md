@@ -1,7 +1,7 @@
 <div align="center">
-  <img src="Design/AppIcon/preview.png" width="112" height="112" alt="Workspace Status, a native AeroSpace workspace switcher for the macOS menu bar" />
+  <img src="Design/AppIcon/preview.png" width="112" height="112" alt="Workspace Status, a native macOS menu bar app for AeroSpace workspace switching" />
   <h1>Workspace Status</h1>
-  <p>A native macOS menu bar workspace switcher for AeroSpace.</p>
+  <p>A native macOS menu bar app for viewing and switching AeroSpace workspaces.</p>
   <p>
     <a href="LICENSE"><img src="https://img.shields.io/github/license/Li-RC/workspace-status?label=license&amp;color=blue" alt="License: MIT" /></a>
     <a href="#requirements"><img src="https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&amp;logoColor=white" alt="macOS 14 or later" /></a>
@@ -18,9 +18,11 @@
   </p>
 </div>
 
-Workspace Status is an **AeroSpace workspace indicator and switcher for the native macOS menu bar**. See your active workspace, the applications open in each workspace, and unread app badges without opening Mission Control. Click a workspace to switch, click an app to focus its window, or open the bell dropdown for a window overview.
+Workspace Status is a **native macOS menu bar app for AeroSpace**, providing a **workspace indicator and workspace switcher** directly in your existing menu bar. See your active workspace, the applications open in each workspace, and unread app badges without opening Mission Control. Click a workspace to switch, click an app to focus its window, or open the bell dropdown for a window overview.
 
-Built with **Swift, SwiftUI and AppKit**, it brings **Liquid Glass** controls to macOS 26 and later, with a fallback interface on macOS 14 and 15. It works alongside the [AeroSpace tiling window manager](https://nikitabobko.github.io/AeroSpace/) as a standalone menu bar app, without requiring SketchyBar or a custom bar configuration.
+It is a standalone application that lives in Apple's native menu bar, not a separate status bar or menu bar replacement. It works alongside the [AeroSpace tiling window manager](https://nikitabobko.github.io/AeroSpace/) without requiring SketchyBar or a custom bar configuration.
+
+Built with **Swift, SwiftUI and AppKit**, it brings **Liquid Glass** controls to macOS 26 and later, with a fallback interface on macOS 14 and 15.
 
 ## Features
 
@@ -144,6 +146,10 @@ bash build.sh
 You can override the local configuration with `WORKSPACE_STATUS_SIGNING_IDENTITY`. A configured certificate must be available; the build does not silently fall back to ad-hoc signing. Keep the same certificate, bundle identifier and installation path across updates to preserve the app's identity. Switching from ad-hoc signing may require granting Accessibility permission once more; subsequent permission retention should be verified on your Mac. Local self-signed certificates are for development; public releases should use Developer ID signing and notarization.
 
 ## Frequently asked questions
+
+### Is this a separate bar or a native menu bar app?
+
+Workspace Status is a native macOS menu bar application. Its workspace indicators, app icons and dropdown live in the existing system menu bar. It does not replace the macOS menu bar or add a separate bar to your desktop.
 
 ### Do I need SketchyBar?
 
