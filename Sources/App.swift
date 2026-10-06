@@ -197,16 +197,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Share the same strip and hit regions between the native item and positioned displays.
         statusImage = NSImage(size: NSSize(width: x + 20, height: 22), flipped: true) { [weak self] _ in
             guard let button = self?.item.button else { return false }
+            func drawSymbol(_ image: NSImage, in frame: NSRect) {
+                if self?.placement.usesOverlays == true {
+                    menuBarSymbol(image).draw(in: frame,
+                        from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
+                } else {
+                    (button.cell as! NSButtonCell).drawImage(image, withFrame: frame, in: button)
+                }
+            }
             for space in snapshot.menuSpaces {
                 let frame = frames[space]!
                 let current = space == snapshot.current
                 let badge = workspaceBadge(current && self?.workspaces.error != nil ? "!" : space, selected: current)
-                if self?.placement.usesOverlays == true {
-                    menuBarSymbol(badge).draw(in: NSRect(origin: frame.origin, size: badge.size),
-                        from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
-                } else {
-                    (button.cell as! NSButtonCell).drawImage(badge, withFrame: NSRect(origin: frame.origin, size: badge.size), in: button)
-                }
+                drawSymbol(badge, in: NSRect(origin: frame.origin, size: badge.size))
                 let bundles = compact ? [] : snapshot.appBundles(in: space)
                 if !bundles.isEmpty {
                     let icons = iconStrip(bundles)
@@ -217,12 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let size = bellImage.size
             let frame = NSRect(x: bellRect.midX - size.width / 2 - 2, y: (22 - size.height) / 2,
                                width: size.width, height: size.height)
-            if self?.placement.usesOverlays == true {
-                menuBarSymbol(bellImage).draw(in: frame,
-                    from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
-            } else {
-                (button.cell as! NSButtonCell).drawImage(bellImage, withFrame: frame, in: button)
-            }
+            drawSymbol(bellImage, in: frame)
             return true
         }
         if let statusImage {
