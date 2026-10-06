@@ -1,5 +1,6 @@
 import AppKit
 import ServiceManagement
+import ApplicationServices
 
 func runSettingsStoreTests() {
     let suite = "WorkspaceStatus.settings-check.\(UUID().uuidString)"
@@ -185,6 +186,11 @@ func runSettingsTest(args: [String]) {
                 print("Settings window visible: \(window.isVisible), key: \(window.isKeyWindow), app active: \(application.isActive)")
                 if !args.contains("--hold-settings-preview") {
                     precondition(window.isKeyWindow && application.isActive, "Settings became visible without keyboard focus")
+                    if AXIsProcessTrusted(), NSScreen.screens.contains(where: { $0.auxiliaryTopLeftArea == nil }) {
+                        precondition(MenuGeometry.read(top: NSScreen.screens.first?.frame.maxY ?? 0) != nil,
+                                     "Opening Settings lost the visible application-menu geometry")
+                        print("Visible menu geometry remains available while Settings is active: PASS")
+                    }
                 }
                 print("Settings reuse/reopen/close, command-comma, bell-only context menus on both renderers and live preferences: PASS")
                 if let index = args.firstIndex(of: "--render-settings-preview"), args.count > index + 1,

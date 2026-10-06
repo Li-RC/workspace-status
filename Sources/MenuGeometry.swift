@@ -23,7 +23,8 @@ struct MenuGeometry {
     var statusItems: [(frame: NSRect, own: Bool)]
 
     static func read(top: CGFloat) -> MenuGeometry? {
-        guard let front = NSWorkspace.shared.frontmostApplication,
+        // Accessory apps can receive keyboard focus while another app still owns the visible menus.
+        guard let front = NSWorkspace.shared.menuBarOwningApplication,
               front.bundleIdentifier != "com.apple.loginwindow" else {
             if CommandLine.arguments.contains("--placement-live-test") { print("Live menu read: foreground application unavailable") }
             return nil
